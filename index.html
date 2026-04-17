@@ -833,6 +833,7 @@ let floppyInserted = false;  // floppy disk is in the drive
 let messageHeard  = false;   // answering machine message has been played
 let floppyRead    = false;   // player has read the floppy letter
 let awaitingFloppyPass    = false; // waiting for floppy password input
+let awaitingSitTarget     = false; // waiting for sit location response
 let floppyUnlocked        = false; // floppy password has been accepted this session
 let floppyDecryptedContent = null; // decrypted letter text, cached after unlock
 let kitchenDrawerOpen = false; // kitchen drawer by the fridge
@@ -1244,6 +1245,7 @@ function startAdventure() {
   floppyRead        = false;
   ejectNudged       = false;
   awaitingFloppyPass = false;
+  awaitingSitTarget  = false;
   floppyUnlocked     = false;
   kitchenDrawerOpen = false;
   stoveOn           = false;
@@ -1732,6 +1734,7 @@ function gameSit(args) {
     else if (playerArea === 'sofa')                           where = 'sofa';
     else {
       addLine('Where? The sofa or the desk chair.');
+      awaitingSitTarget = true;
       return;
     }
   }
@@ -1746,6 +1749,20 @@ function gameSit(args) {
     if (tvOn) addLine("You sink into the sofa. Cracker shifts and presses against your leg. You watch Hogan's Heroes.");
     else      addLine('You sink into the sofa. Cracker shifts and presses against your leg. The room is quiet.');
   }
+}
+
+function handleSitTarget(val) {
+  addLine('> ' + val, 'hi');
+  awaitingSitTarget = false;
+  const v = val.trim().toLowerCase();
+  if (/chair|desk/.test(v))       gameSit(['chair']);
+  else if (/sofa|couch/.test(v))  gameSit(['sofa']);
+  else {
+    addLine("Sofa or desk chair.");
+    awaitingSitTarget = true;
+  }
+  addLine('');
+  promptEl.textContent = '> ';
 }
 
 function gameStand() {
@@ -2455,6 +2472,7 @@ inputEl.addEventListener('keydown', async (e) => {
     inputEl.value = '';
     if      (state === 'shell')                      handleCommand(val);
     else if (state === 'game' && awaitingFloppyPass) await handleFloppyPass(val);
+    else if (state === 'game' && awaitingSitTarget)  handleSitTarget(val);
     else if (state === 'game')                       handleGameCommand(val);
     return;
   }
