@@ -4,22 +4,26 @@
   <meta charset="UTF-8">
   <title>Floppy Letter — Encrypt</title>
   <style>
-    body { font-family: monospace; background: #111; color: #ccc; padding: 2rem; max-width: 700px; }
-    h1   { color: #fff; font-size: 1.1rem; margin-bottom: 1.5rem; }
-    label { display: block; color: #aaa; margin-bottom: 0.3rem; }
+    body     { font-family: monospace; background: #111; color: #ccc; padding: 2rem; max-width: 700px; }
+    h1       { color: #fff; font-size: 1.1rem; margin-bottom: 1.5rem; }
+    label    { display: block; color: #aaa; margin-bottom: 0.3rem; }
     input, textarea { width: 100%; background: #222; border: 1px solid #444; color: #fff;
                       font-family: monospace; font-size: 0.95rem; padding: 0.5rem;
                       box-sizing: border-box; margin-bottom: 1.2rem; }
     textarea { height: 220px; resize: vertical; }
+    .buttons { display: flex; gap: 0.75rem; flex-wrap: wrap; }
     button   { background: #33ff33; color: #000; border: none; padding: 0.5rem 1.2rem;
-                font-family: monospace; font-size: 1rem; cursor: pointer; }
-    button:hover { background: #55ff55; }
-    #result { margin-top: 1.5rem; }
-    #cipher { background: #1a1a1a; border: 1px solid #444; color: #33ff33;
-              font-family: monospace; font-size: 0.8rem; padding: 0.8rem;
-              word-break: break-all; white-space: pre-wrap; display: none; }
-    .note   { color: #666; font-size: 0.85rem; margin-top: 0.5rem; }
-    .error  { color: #ff4444; margin-top: 0.8rem; }
+               font-family: monospace; font-size: 1rem; cursor: pointer; }
+    button:hover  { background: #55ff55; }
+    button:disabled { background: #1a6b1a; color: #333; cursor: default; }
+    #result  { margin-top: 1.5rem; }
+    #cipher  { background: #1a1a1a; border: 1px solid #444; color: #33ff33;
+               font-family: monospace; font-size: 0.8rem; padding: 0.8rem;
+               word-break: break-all; white-space: pre-wrap; display: none; }
+    .status  { margin-top: 0.8rem; font-size: 0.9rem; }
+    .ok      { color: #33ff33; }
+    .error   { color: #ff4444; }
+    .note    { color: #666; font-size: 0.85rem; margin-top: 0.5rem; }
   </style>
 </head>
 <body>
@@ -31,58 +35,133 @@
   <label for="letter">Letter text</label>
   <textarea id="letter" placeholder="Dear Joe,&#10;&#10;Your letter here..."></textarea>
 
-  <button onclick="encrypt()">Encrypt</button>
+  <div class="buttons">
+    <button id="btn-encrypt" onclick="encryptOnly()">Encrypt</button>
+    <button id="btn-save"    onclick="encryptAndSave()" disabled>Save to index.html</button>
+  </div>
 
   <div id="result">
     <div id="cipher"></div>
     <p class="note" id="note" style="display:none">
-      Copy everything above and paste it into <code>CONFIG.FLOPPY_CIPHER</code> in index.html.
+      Cipher ready. Click <strong>Save to index.html</strong> to write it directly,
+      or copy and paste into <code>CONFIG.FLOPPY_CIPHER</code> manually.
     </p>
-    <p class="error" id="err"></p>
+    <p class="status" id="status"></p>
   </div>
 
   <script>
-  async function encrypt() {
+  let lastCipher = null;
+
+  async function buildCipher() {
     const pass   = document.getElementById('pass').value;
     const letter = document.getElementById('letter').value;
+    const errEl  = document.getElementById('status');
+
+    errEl.className   = 'status';
+    errEl.textContent = '';
+
+    if (!pass)   { errEl.className = 'status error'; errEl.textContent = 'Enter a password.';  return null; }
+    if (!letter) { errEl.className = 'status error'; errEl.textContent = 'Enter letter text.'; return null; }
+
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv   = crypto.getRandomValues(new Uint8Array(12));
+
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']
+    );
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt']
+    );
+
+    const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(letter));
+    const blob = new Uint8Array(16 + 12 + ct.byteLength);
+    blob.set(salt, 0);
+    blob.set(iv,   16);
+    blob.set(new Uint8Array(ct), 28);
+
+    return btoa(String.fromCharCode(...blob));
+  }
+
+  async function encryptOnly() {
     const cipherEl = document.getElementById('cipher');
     const noteEl   = document.getElementById('note');
-    const errEl    = document.getElementById('err');
+    const saveBtn  = document.getElementById('btn-save');
 
     cipherEl.style.display = 'none';
     noteEl.style.display   = 'none';
-    errEl.textContent      = '';
-
-    if (!pass)   { errEl.textContent = 'Enter a password.';    return; }
-    if (!letter) { errEl.textContent = 'Enter letter text.';   return; }
+    saveBtn.disabled       = true;
+    lastCipher             = null;
 
     try {
-      const salt = crypto.getRandomValues(new Uint8Array(16));
-      const iv   = crypto.getRandomValues(new Uint8Array(12));
-
-      const keyMaterial = await crypto.subtle.importKey(
-        'raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']
-      );
-      const key = await crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        false,
-        ['encrypt']
-      );
-
-      const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(letter));
-      const blob = new Uint8Array(16 + 12 + ct.byteLength);
-      blob.set(salt, 0);
-      blob.set(iv,   16);
-      blob.set(new Uint8Array(ct), 28);
-
-      const b64 = btoa(String.fromCharCode(...blob));
+      const b64 = await buildCipher();
+      if (!b64) return;
+      lastCipher             = b64;
       cipherEl.textContent   = b64;
       cipherEl.style.display = 'block';
       noteEl.style.display   = 'block';
+      saveBtn.disabled       = false;
     } catch (e) {
-      errEl.textContent = 'Encryption failed: ' + e.message;
+      const s = document.getElementById('status');
+      s.className = 'status error';
+      s.textContent = 'Encryption failed: ' + e.message;
+    }
+  }
+
+  async function encryptAndSave() {
+    const statusEl = document.getElementById('status');
+    statusEl.className   = 'status';
+    statusEl.textContent = '';
+
+    // Re-encrypt fresh if needed
+    if (!lastCipher) {
+      try { lastCipher = await buildCipher(); } catch (e) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'Encryption failed: ' + e.message;
+        return;
+      }
+      if (!lastCipher) return;
+    }
+
+    // Pick index.html
+    let fileHandle;
+    try {
+      [fileHandle] = await window.showOpenFilePicker({
+        types: [{ description: 'HTML file', accept: { 'text/html': ['.html'] } }],
+        multiple: false,
+      });
+    } catch {
+      return; // user cancelled
+    }
+
+    // Read, patch, write
+    try {
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+
+      const updated = text.replace(
+        /(FLOPPY_CIPHER:\s*')[^']*(')/,
+        `$1${lastCipher}$2`
+      );
+
+      if (updated === text) {
+        statusEl.className   = 'status error';
+        statusEl.textContent = "Couldn't find FLOPPY_CIPHER in that file. Are you sure it's index.html?";
+        return;
+      }
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(updated);
+      await writable.close();
+
+      statusEl.className   = 'status ok';
+      statusEl.textContent = `✓ Saved to ${fileHandle.name}`;
+    } catch (e) {
+      statusEl.className   = 'status error';
+      statusEl.textContent = 'Write failed: ' + e.message;
     }
   }
   </script>
