@@ -159,10 +159,9 @@ const CONFIG = {
   LOGIN_USER: 'joe',
 
   /* Encrypted floppy letter — generate with encrypt.html */
-  FLOPPY_CIPHER: 'PASTE_YOUR_CIPHER_HERE',
+  FLOPPY_CIPHER: 'dlCi/PrmxQPoxSzH7XF8pfnKDa5fW0pWRGHb/l7hnzoxl8201+nDBLFN2GNsnT/al7nHhzww8WY35GnX6d1TfnK+YAz7pIwawgIlqpL+DZjUeprS7FjAizcLH+cUEOaYaAgAksMeqvrE1Q==',
 
   /* System flavour */
-  HOSTNAME:  'owl.temple.edu',
   BOOT_DATE: 'Tue Oct  5 09:13:01 EDT 1993',
   HOME:      '/home/joe',
 };
@@ -171,19 +170,17 @@ const CONFIG = {
    VIRTUAL FILESYSTEM
    ════════════════════════════════════════════════════════════════════════════
 
-   Add or edit files here.  Set `protected: true` on any file that should only
-   be readable after login.
+   Add or edit files here.
 
    File fields:
-     type     : 'file' | 'dir'
-     perms    : ls -l permission string
-     owner    : owner name
-     group    : group name
-     size     : byte count shown in ls -l
-     mtime    : modification time string shown in ls -l
-     hidden   : true = only shown in ls -a / ls -la
-     protected: true = cannot be read unless logged in
-     content  : file text (for type:'file')
+     type    : 'file' | 'dir'
+     perms   : ls -l permission string
+     owner   : owner name
+     group   : group name
+     size    : byte count shown in ls -l
+     mtime   : modification time string shown in ls -l
+     hidden  : true = only shown in ls -a / ls -la
+     content : file text (for type:'file')
 */
 const FS = {
 
@@ -273,10 +270,10 @@ Mosaic 2.0 is on /usr/local/bin -- DNS is slow, be patient.`
     size:128, mtime:'Oct  5 09:00'
   },
 
-  /* ── Letter files — protected: true means login required ─────────────── */
+  /* ── Letter files ────────────────────────────────────────────────────── */
   '/home/joe/letters/letter_001.txt': {
     type:'file', perms:'-rw-------', owner:'joe', group:'staff',
-    size:512, mtime:'Oct  1 14:22', protected:true,
+    size:512, mtime:'Oct  1 14:22',
     content:
 `October 1, 1993
 
@@ -289,7 +286,7 @@ who logs in.]`
 
   '/home/joe/letters/letter_002.txt': {
     type:'file', perms:'-rw-------', owner:'joe', group:'staff',
-    size:512, mtime:'Oct  3 20:11', protected:true,
+    size:512, mtime:'Oct  3 20:11',
     content:
 `October 3, 1993
 
@@ -356,7 +353,7 @@ exec /usr/local/bin/buckingham`
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   MOTD — shown after successful login
+   MOTD — shown on startup
    ════════════════════════════════════════════════════════════════════════════ */
 const MOTD = `
 Welcome to Buckingham Place.
@@ -821,7 +818,6 @@ const panelEl  = document.getElementById('panel');
 // ── State ─────────────────────────────────────────────────────────────────
 let state        = 'shell'; // shell | more | game
 let cwd          = CONFIG.HOME;
-let loggedIn     = false;
 let currentUser  = null;
 let prevState    = 'shell'; // state to restore after `more` pager
 let history      = [];      // shell command history
@@ -866,7 +862,7 @@ function addLine(text = '', cls = '') {
 
 function clearOutput() { outputEl.innerHTML = ''; }
 
-// ── SHA-256 via Web Crypto ─────────────────────────────────────────────────
+// ── Crypto helpers ────────────────────────────────────────────────────────
 async function deriveKey(password, salt) {
   const keyMaterial = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
@@ -942,7 +938,6 @@ function updatePanel() {
 // ── Boot: skip straight to shell ───────────────────────────────────────────
 function boot() {
   currentUser = CONFIG.LOGIN_USER;
-  loggedIn    = true;
   cwd         = CONFIG.HOME;
   updatePanel();
 
@@ -1050,7 +1045,6 @@ function cmdCat(args) {
     const node = FS[path];
     if (!node)                              { addLine(`cat: ${a}: No such file or directory`, 'err'); continue; }
     if (node.type === 'dir')                { addLine(`cat: ${a}: Is a directory`, 'err');            continue; }
-    if (node.protected && !loggedIn)        { addLine(`cat: ${a}: Permission denied`, 'err');         continue; }
     for (const line of (node.content || '').split('\n')) addLine(line);
   }
 }
@@ -1062,7 +1056,6 @@ function cmdMore(args) {
   const node = FS[path];
   if (!node)                        { addLine(`more: ${a}: No such file or directory`, 'err'); return; }
   if (node.type === 'dir')          { addLine(`more: ${a}: Is a directory`, 'err');            return; }
-  if (node.protected && !loggedIn)  { addLine(`more: ${a}: Permission denied`, 'err');         return; }
   startMore((node.content || '').split('\n'), state);
 }
 
@@ -1082,8 +1075,7 @@ function cmdDate()   { addLine(CONFIG.BOOT_DATE); }
 function cmdEcho(args) { addLine(args.join(' ')); }
 
 function cmdUname(args) {
-  const host = CONFIG.HOSTNAME.split('.')[0];
-  if (args.includes('-a')) addLine(`SunOS ${CONFIG.HOSTNAME} 4.1.3 1 sun4m`);
+  if (args.includes('-a')) addLine('SunOS localhost 4.1.3 1 sun4m');
   else                     addLine('SunOS');
 }
 
@@ -1215,7 +1207,6 @@ function handleCommand(raw) {
       const targetPath = absNode ? normPath(cmdRaw) : localPath;
 
       if (localNode && localNode.type === 'file' && localNode.perms.includes('x')) {
-        if (targetPath === '/mnt/floppy/letters') { startAdventure(); return; }
         addLine(`${cmdRaw}: executed.`, 'dim');
       } else if (FS[localPath] && FS[localPath].type === 'dir') {
         addLine(`${cmdRaw}: is a directory`, 'err');
