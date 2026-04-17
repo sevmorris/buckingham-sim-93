@@ -834,6 +834,8 @@ let messageHeard  = false;   // answering machine message has been played
 let floppyRead    = false;   // player has read the floppy letter
 let awaitingFloppyPass    = false; // waiting for floppy password input
 let awaitingSitTarget     = false; // waiting for sit location response
+let pendingVerb           = null;  // last verb that asked "X what?" — next bare noun uses it
+let lastItem              = null;  // last item id mentioned — 'it'/'that' resolves to this
 let floppyUnlocked        = false; // floppy password has been accepted this session
 let floppyDecryptedContent = null; // decrypted letter text, cached after unlock
 let kitchenDrawerOpen = false; // kitchen drawer by the fridge
@@ -1246,6 +1248,8 @@ function startAdventure() {
   ejectNudged       = false;
   awaitingFloppyPass = false;
   awaitingSitTarget  = false;
+  pendingVerb        = null;
+  lastItem           = null;
   floppyUnlocked     = false;
   kitchenDrawerOpen = false;
   stoveOn           = false;
@@ -1318,7 +1322,7 @@ function gameLook() {
 }
 
 function gameTake(args) {
-  if (!args.length) { addLine('Take what?'); return; }
+  if (!args.length) { pendingVerb = 'take'; addLine('Take what?'); return; }
   autoStand();
   const word = args.join(' ');
 
@@ -1370,6 +1374,7 @@ function gameTake(args) {
     fl.inDrawer = false;
     gInventory.push('floppy');
     addLine(wasInDrawer ? 'You take the floppy disk from the drawer.' : 'You pick up the floppy disk.');
+    lastItem = 'floppy';
     return;
   }
 
@@ -1400,10 +1405,11 @@ function gameTake(args) {
   else if (wasInDrawer)         addLine(`You take ${it.label} from the drawer.`);
   else if (wasInKitchenDrawer)  addLine(`You take ${it.label} from the kitchen drawer.`);
   else                          addLine(`You pick up ${it.label}.`);
+  lastItem = it.id;
 }
 
 function gameDrop(args) {
-  if (!args.length) { addLine('Drop what?'); return; }
+  if (!args.length) { pendingVerb = 'drop'; addLine('Drop what?'); return; }
   autoStand();
   // Strip trailing filler words ("put record back", "put it down", "put away")
   const raw = args.join(' ').replace(/\s+(back|away|down|there|here)$/, '').trim();
@@ -1426,7 +1432,7 @@ function gameDrop(args) {
 }
 
 function gameRead(args) {
-  if (!args.length) { addLine('Read what?'); return; }
+  if (!args.length) { pendingVerb = 'read'; addLine('Read what?'); return; }
   const word = args.join(' ');
 
   // Floppy / letter.txt — reads from drive
@@ -1477,6 +1483,7 @@ function gameRead(args) {
   if (it.inDrawer        && !drawerOpen)        { addLine("You don't see that here."); return; }
   if (it.inKitchenDrawer && !kitchenDrawerOpen) { addLine("You don't see that here."); return; }
   if (!it.content) { addLine(`There's nothing to read on ${it.label}.`); return; }
+  lastItem = it.id;
   addLine('');
   for (const line of it.content.split('\n')) addLine(line);
   if (it.reveals) {
@@ -1490,10 +1497,10 @@ function gameRead(args) {
 }
 
 function gameExamine(args) {
-  if (!args.length) { addLine('Examine what?'); return; }
+  if (!args.length) { pendingVerb = 'examine'; addLine('Examine what?'); return; }
   // Strip leading articles
   while (args.length && (args[0] === 'the' || args[0] === 'a' || args[0] === 'an')) args = args.slice(1);
-  if (!args.length) { addLine('Examine what?'); return; }
+  if (!args.length) { pendingVerb = 'examine'; addLine('Examine what?'); return; }
   const word = args.join(' ');
 
   // Special targets
@@ -1521,6 +1528,7 @@ function gameExamine(args) {
   if (it.inFridge        && !fridgeOpen        && !gInventory.includes(it.id)) { addLine("You don't see that here."); return; }
   if (it.inKitchenDrawer && !kitchenDrawerOpen && !gInventory.includes(it.id)) { addLine("You don't see that here."); return; }
   if (it.id === 'scrapple' && scrappleInPan && !gInventory.includes('scrapple')) { /* in pan — still examinable */ }
+  lastItem = it.id;
   addLine(typeof it.examDesc === 'function' ? it.examDesc() : it.examDesc);
 }
 
@@ -1580,7 +1588,7 @@ function gamePlay(args) {
 }
 
 function gameOpen(args) {
-  if (!args.length) { addLine('Open what?'); return; }
+  if (!args.length) { pendingVerb = 'open'; addLine('Open what?'); return; }
   autoStand();
   while (args.length && (args[0] === 'the' || args[0] === 'a')) args = args.slice(1);
   const word = args.join(' ');
@@ -1973,7 +1981,7 @@ function gameSmell(args) {
 }
 
 function gameTouch(args) {
-  if (!args.length) { addLine('Touch what?'); return; }
+  if (!args.length) { pendingVerb = 'touch'; addLine('Touch what?'); return; }
   const word = args.join(' ');
   if (/sofa|couch/.test(word))          { addLine('Soft. Worn in the right places.'); return; }
   if (/quilt|blanket|throw/.test(word)) { addLine('Soft from years of washing.'); return; }
@@ -2014,7 +2022,7 @@ function gameTouch(args) {
 }
 
 function gameUse(args) {
-  if (!args.length) { addLine('Use what?'); return; }
+  if (!args.length) { pendingVerb = 'use'; addLine('Use what?'); return; }
   const word = args.join(' ');
   if (/lamp/.test(word))                  { addLine(`Try:  turn ${lampOn ? 'off' : 'on'} lamp`); return; }
   if (/tv|television/.test(word))         { addLine(`Try:  turn ${tvOn ? 'off' : 'on'} tv`); return; }
@@ -2133,7 +2141,7 @@ function gameEat(args) {
 }
 
 function gameClose(args) {
-  if (!args.length) { addLine('Close what?'); return; }
+  if (!args.length) { pendingVerb = 'close'; addLine('Close what?'); return; }
   // Strip leading articles
   while (args.length && (args[0] === 'the' || args[0] === 'a')) args = args.slice(1);
   const word = args.join(' ');
@@ -2236,7 +2244,18 @@ function handleGameCommand(raw) {
   if (gHistory[gHistory.length - 1] !== trimmed) gHistory.push(trimmed);
   gHistIdx = -1;
 
-  const tokens = trimmed.toLowerCase().split(/\s+/);
+  // Consume pending verb / last item before tokenising
+  const pv = pendingVerb;
+  pendingVerb = null;
+
+  // Pronoun substitution: 'it'/'that'/'this' → last mentioned item
+  const pronounSub = (str) => {
+    if (!lastItem) return str;
+    return str.replace(/\bit\b|\bthat\b|\bthis\b|\bone\b/g, lastItem);
+  };
+  const subbed  = pronounSub(trimmed);
+
+  const tokens = subbed.toLowerCase().split(/\s+/);
   const cmd    = tokens[0];
   const args   = tokens.slice(1);
   const rest   = args.join(' ');
@@ -2422,6 +2441,7 @@ function handleGameCommand(raw) {
         showPrompt();
         return;
       default:
+        if (pv) { handleGameCommand(pv + ' ' + trimmed); return; }
         addLine("That doesn't seem to do anything.", 'dim');
     }
   }
