@@ -790,7 +790,7 @@ const SCENERY = {
     },
     toggle: true,
     turnOn()  { vcrOn = true;  addLine('The VCR clicks on. The clock blinks 12:00.'); },
-    turnOff() { vcrOn = false; vhsPlaying = null; addLine('You click the VCR off.'); },
+    turnOff() { vcrOn = false; vhsPlaying = null; vhsPlayingId = null; addLine('You click the VCR off.'); },
   },
   floor: {
     names: ['floor', 'ground', 'rug', 'area rug', 'carpet'],
@@ -880,7 +880,8 @@ let scrappleCooked    = false; // scrapple is fully cooked and ready to eat
 let ejectNudged   = false;   // eject nudge has been shown once since reading
 let playerArea    = null;    // rough location: null=general, 'desk', 'sofa', 'kitchen', 'shelf', 'north'
 let vcrOn         = false;   // VCR power state
-let vhsPlaying    = null;    // label of VHS currently playing
+let vhsPlaying    = null;    // label of VHS currently playing (for display)
+let vhsPlayingId  = null;    // id of VHS currently playing (for item identity)
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function addLine(text = '', cls = '') {
@@ -1283,6 +1284,8 @@ function startAdventure() {
   ejectNudged       = false;
   vcrOn             = false;
   vhsPlaying        = null;
+  vhsPlayingId      = null;
+  floppyDecryptedContent = null;
   awaitingFloppyPass = false;
   awaitingSitTarget  = false;
   pendingVerb        = null;
@@ -1317,7 +1320,9 @@ function startAdventure() {
 
 function gameItem(word) {
   const w = word.toLowerCase().trim();
-  return ITEMS.find(it => it.id === w || it.label.toLowerCase().includes(w));
+  // Prefer items not already in inventory so duplicate-label items (e.g. unlabeled tapes) are reachable
+  return ITEMS.find(it => (it.id === w || it.label.toLowerCase().includes(w)) && !gInventory.includes(it.id))
+      || ITEMS.find(it =>  it.id === w || it.label.toLowerCase().includes(w));
 }
 
 function findScenery(word) {
@@ -1369,6 +1374,7 @@ function gameTake(args) {
     const penItem = ITEMS.find(it => it.id === 'pen');
     penItem.hidden = false;
     gInventory.push('pen');
+    lastItem = 'pen';
     addLine('You take one of the pens.');
     return;
   }
@@ -1474,8 +1480,9 @@ function gameDrop(args) {
     addLine(`You set down ${it.label}. The boombox goes quiet.`);
     return;
   }
-  if (it.shelvedVHS && vhsPlaying === it.label) {
-    vhsPlaying = null;
+  if (it.shelvedVHS && vhsPlayingId === it.id) {
+    vhsPlaying   = null;
+    vhsPlayingId = null;
     addLine(`You pull ${it.label} from the VCR and set it down.`);
     return;
   }
@@ -1607,8 +1614,12 @@ function gamePlay(args) {
 
   // Generic play shorthands — find what's in hand
   let it = gameItem(word);
-  if (!it && /^(record|it|this|the record)$/.test(word)) {
+  if (!it && /^(record|it|this|the record|tape|cassette)$/.test(word)) {
     it = ITEMS.find(i => (i.shelved || i.shelvedTape) && gInventory.includes(i.id));
+    if (!it && /^(tape|cassette)$/.test(word)) {
+      // 'play tape' with no cassette in hand — try VHS
+      it = ITEMS.find(i => i.shelvedVHS && gInventory.includes(i.id));
+    }
     if (!it) { addLine("You're not holding anything you can play."); return; }
   }
   if (!it && /^(vhs|movie|film|video|vhs tape|video tape)$/.test(word)) {
@@ -1621,10 +1632,11 @@ function gamePlay(args) {
   if (it.shelvedVHS) {
     if (!gInventory.includes(it.id)) { addLine(`Take ${it.label} off the shelf first.`); return; }
     if (!vcrOn) { addLine("The VCR is off. Turn it on first."); return; }
-    if (vhsPlaying === it.label) { addLine(`That tape is already playing.`); return; }
+    if (vhsPlayingId === it.id) { addLine(`That tape is already playing.`); return; }
     if (vhsPlaying) addLine(`You swap out ${vhsPlaying} and slot in ${it.label}.`);
     else            addLine(`You slide ${it.label} into the VCR.`);
-    vhsPlaying = it.label;
+    vhsPlaying   = it.label;
+    vhsPlayingId = it.id;
     if (!tvOn) {
       addLine('The VCR hums. Turn on the TV to watch.');
       return;
@@ -1890,7 +1902,7 @@ function gameGo(args) {
     addLine(typeof SCENERY.shelf.desc === 'function' ? SCENERY.shelf.desc() : SCENERY.shelf.desc);
     return;
   }
-  if (/^(north|bookshelf|books|cassettes|tapes|boombox)$/.test(dest)) {
+  if (/^(north|bookshelf|books|cassettes|tapes|boombox|vhs|videos|video shelf|vhs shelf|videotapes)$/.test(dest)) {
     playerArea = 'north';
     addLine('You walk to the north shelves.');
     addLine('');
@@ -2268,7 +2280,7 @@ function gameStop(args) {
 
   if (isVCR || (isGeneric && vhsPlaying && !recordPlaying && !cassettePlaying)) {
     if (!vhsPlaying) { addLine("The VCR isn't playing anything."); return; }
-    const was = vhsPlaying; vhsPlaying = null;
+    const was = vhsPlaying; vhsPlaying = null; vhsPlayingId = null;
     addLine(`You stop the VCR. ${was} winds down.`);
     return;
   }
@@ -2294,11 +2306,12 @@ function gameStop(args) {
 }
 
 function gameEjectVHS() {
-  if (!vhsPlaying) { addLine("There's no tape in the VCR."); return; }
-  const tape = ITEMS.find(i => i.shelvedVHS && i.label === vhsPlaying);
+  if (!vhsPlayingId) { addLine("There's no tape in the VCR."); return; }
+  const tape = ITEMS.find(i => i.id === vhsPlayingId);
   if (tape && !gInventory.includes(tape.id)) gInventory.push(tape.id);
   const was = vhsPlaying;
-  vhsPlaying = null;
+  vhsPlaying   = null;
+  vhsPlayingId = null;
   addLine(`The VCR ejects ${was} with a clunk. You take it.`);
 }
 
@@ -2389,7 +2402,7 @@ function handleGameCommand(raw) {
   else if (cmd === 'go'    && (args[0] === 'to' || args[0] === 'into' || args[0] === 'in')) { gameGo(args.slice(1)); }
   else if (cmd === 'walk'  && (args[0] === 'to' || args[0] === 'into')) { gameGo(args.slice(1)); }
   else if (cmd === 'head'  && (args[0] === 'to' || args[0] === 'towards')) { gameGo(args.slice(1)); }
-  else if (cmd === 'play'   && /message|messages|voicemail|tape/.test(rest)) { gamePlayMessage(); }
+  else if (cmd === 'play'   && /message|messages|voicemail/.test(rest)) { gamePlayMessage(); }
   else if (cmd === 'check'  && /message|messages|voicemail|machine/.test(rest)) { gamePlayMessage(); }
   else if (cmd === 'listen' && /message|messages|voicemail|machine/.test(rest)) { gamePlayMessage(); }
   else if (cmd === 'press'  && /play/.test(rest))                       { gamePlayMessage(); }
