@@ -1,4 +1,4 @@
-# Buckingham Sim 93
+# West Philly Simulator 93
 
 A browser-based terminal simulator and text adventure loosely based on a real place and time.
 
