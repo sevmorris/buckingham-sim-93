@@ -387,28 +387,6 @@ const ITEMS = [
 
   // ── Desk items (onDesk: true — visible only when you examine the desk) ───
   {
-    id:       'tmz flyer',
-    label:    'a flyer from the printer',
-    onDesk:   true,
-    examDesc: 'A fresh printout, still slightly warm. Touch Me Zoo at the Khyber Pass.',
-    content:
-`TOUCH ME ZOO
-The Khyber Pass  --  56 S. 2nd St., Philadelphia
-Friday, October 8, 1993  --  Doors at 8pm
-$3`,
-  },
-  {
-    id:       'flyer',
-    label:    'a concert flyer',
-    onDesk:   true,
-    examDesc: 'A photocopied flyer, slightly creased.',
-    content:
-`GUIDED BY VOICES
-JC Dobbs  --  South Street, Philadelphia
-Saturday, October 9, 1993  --  Doors at 9
-$4 cover`
-  },
-  {
     id:       'pens',
     label:    'some pens',
     onDesk:   true,
@@ -538,6 +516,10 @@ $4 cover`
    toggle   : true if  turn on / turn off  applies
 */
 const SCENERY = {
+  chair: {
+    names: ['chair', 'desk chair', 'office chair'],
+    desc: 'A beat-up rolling chair pushed under the desk. The kind that leans back too far if you let it.',
+  },
   desk: {
     names: ['desk', 'metal desk'],
     desc() {
@@ -560,13 +542,7 @@ const SCENERY = {
   },
   printer: {
     names: ['printer', 'dot matrix', 'dot-matrix', 'print', 'output tray', 'tray'],
-    desc() {
-      const flyer = ITEMS.find(i => i.id === 'tmz flyer');
-      const flyerGone = !flyer || gInventory.includes('tmz flyer') || flyer.dropped;
-      return flyerGone
-        ? 'A dot-matrix printer on the desk beside the monitor. Paper loaded, ready to go.'
-        : 'A dot-matrix printer on the desk beside the monitor. A flyer is sitting in the output tray.';
-    },
+    desc: 'A dot-matrix printer on the desk beside the monitor. Paper loaded, ready to go.',
   },
   drawer: {
     names: ['drawer', 'desk drawer'],
@@ -1323,6 +1299,7 @@ function gameLook() {
 
 function gameTake(args) {
   if (!args.length) { addLine('Take what?'); return; }
+  autoStand();
   const word = args.join(' ');
 
   // Taking a single pen from the desk cup
@@ -1407,6 +1384,7 @@ function gameTake(args) {
 
 function gameDrop(args) {
   if (!args.length) { addLine('Drop what?'); return; }
+  autoStand();
   // Strip trailing filler words ("put record back", "put it down", "put away")
   const raw = args.join(' ').replace(/\s+(back|away|down|there|here)$/, '').trim();
   const it = gameItem(raw);
@@ -1547,7 +1525,13 @@ function gameToggle(args, on) {
 function gamePlay(args) {
   if (!args.length) { addLine('Play a record, a tape, or  play messages  for the answering machine.'); return; }
   const word = args.join(' ').replace(/^(the\s+|a\s+)/, '');
-  const it   = gameItem(word);
+
+  // Generic "play record" / "play it" — find what's in hand
+  let it = gameItem(word);
+  if (!it && /^(record|it|this|the record)$/.test(word)) {
+    it = ITEMS.find(i => (i.shelved || i.shelvedTape) && gInventory.includes(i.id));
+    if (!it) { addLine("You're not holding anything you can play."); return; }
+  }
 
   if (!it) { addLine("You don't have that."); return; }
 
@@ -1577,6 +1561,7 @@ function gamePlay(args) {
 
 function gameOpen(args) {
   if (!args.length) { addLine('Open what?'); return; }
+  autoStand();
   while (args.length && (args[0] === 'the' || args[0] === 'a')) args = args.slice(1);
   const word = args.join(' ');
   if (/cabinet|cupboard/.test(word)) {
@@ -1622,6 +1607,7 @@ function gameOpen(args) {
 }
 
 function gameInsertFloppy() {
+  autoStand();
   if (floppyInserted) { addLine('The disk is already in the drive.'); return; }
   if (!gInventory.includes('floppy')) { addLine("You don't have the floppy disk."); return; }
   gInventory = gInventory.filter(id => id !== 'floppy');
@@ -1632,6 +1618,7 @@ function gameInsertFloppy() {
 }
 
 function gameEjectFloppy() {
+  autoStand();
   if (!floppyInserted) { addLine("There's no disk in the drive."); return; }
   floppyInserted = false;
   gInventory.push('floppy');
@@ -1714,15 +1701,20 @@ function _drinkBeer(it) {
 
 function gameSit(args) {
   const target = (args || []).join(' ');
-  // "sit on <thing>" — only the sofa makes sense
-  if (target && !/^(down|on (the )?(sofa|couch)|on it)$/.test(target) && !/^(sofa|couch)$/.test(target)) {
+  const atChair = /chair|desk/.test(target);
+  const atSofa  = !target || /^(down|on (the )?(sofa|couch)|on it|sofa|couch)$/.test(target);
+  if (target && !atChair && !atSofa) {
     addLine("You can't sit on that.");
     return;
   }
   if (seated) { addLine("You're already sitting."); return; }
   seated = true;
-  if (tvOn) addLine("You sink into the sofa. Cracker shifts and presses against your leg. You watch Hogan's Heroes.");
-  else      addLine('You sink into the sofa. Cracker shifts and presses against your leg. The room is quiet.');
+  if (atChair) {
+    addLine('You drop into the desk chair and roll up to the monitor.');
+  } else {
+    if (tvOn) addLine("You sink into the sofa. Cracker shifts and presses against your leg. You watch Hogan's Heroes.");
+    else      addLine('You sink into the sofa. Cracker shifts and presses against your leg. The room is quiet.');
+  }
 }
 
 function gameStand() {
@@ -1731,8 +1723,15 @@ function gameStand() {
   addLine('You get up.');
 }
 
+function autoStand() {
+  if (!seated) return;
+  seated = false;
+  addLine('You get up.');
+}
+
 function gameGo(args) {
   if (!args.length) { addLine('Where to?'); return; }
+  autoStand();
   const dest = args.join(' ').replace(/^(over to |to |into |in |the )+/g, '').trim();
   if (/^(east|kitchen)$/.test(dest)) {
     addLine('You step into the kitchen.');
