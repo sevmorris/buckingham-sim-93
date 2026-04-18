@@ -1052,7 +1052,7 @@ const SCENERY = {
   phone: {
     names: ['phone', 'telephone', 'handset', 'receiver'],
     desc() {
-      return 'A push-button phone. Off-white, cord wrapped around the base a few times.';
+      return 'A push-button phone. Grey and black.';
     },
   },
   answeringMachine: {
@@ -2768,7 +2768,7 @@ function gameTouch(args) {
   if (/book|paperback|textbook/.test(word)) { addLine('Bent spines. Some pages soft from being turned so many times.'); return; }
   if (/boombox|boom box|stereo/.test(word)) { addLine('Plastic and metal. The buttons click satisfyingly.'); return; }
   if (/computer|pc|windows|monitor|keyboard|dos/.test(word)) { addLine('The keyboard has that specific resistance. The monitor radiates a faint warmth.'); return; }
-  if (/phone|telephone|receiver/.test(word)) { addLine('Cool plastic. The cord is twisted into a knot near the base.'); return; }
+  if (/phone|telephone|receiver/.test(word)) { addLine('Cool plastic. The buttons have a little give.'); return; }
   if (/answering machine|machine/.test(word)) { addLine(`Plastic. The play button has a worn spot in the center.${messageHeard ? '' : ' The light pulses under your finger.'}`); return; }
   if (/vcr/.test(word))                { addLine(vcrOn ? 'Warm plastic. The eject button clicks satisfyingly.' : 'Cool plastic. The eject button clicks satisfyingly.'); return; }
   if (/floppy|disk/.test(word))       { addLine('Smooth plastic. A little warm from being in your pocket.'); return; }
