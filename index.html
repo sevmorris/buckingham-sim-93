@@ -843,11 +843,12 @@ const SCENERY = {
     names: ['cabinet', 'cabinet above', 'kitchen cabinet', 'cupboard'],
     desc() {
       if (!cabinetOpen) return 'A cabinet mounted above the counter, next to the coffee maker. It\'s closed.';
-      const mug = ITEMS.find(it => it.id === 'mug');
-      const mugGone = gInventory.includes('mug');
-      return mugGone
-        ? 'The cabinet is open. It\'s empty now.'
-        : 'The cabinet is open. There\'s a ceramic mug on the shelf inside.';
+      const hasMug   = !gInventory.includes('mug');
+      const hasGlass = !gInventory.includes('glass');
+      if (!hasMug && !hasGlass) return 'The cabinet is open. You\'ve taken what you need — a few more mugs and glasses still on the shelf.';
+      if (hasMug && hasGlass)   return 'The cabinet is open. A few ceramic mugs and drinking glasses on the shelf.';
+      if (hasMug)               return 'The cabinet is open. A few ceramic mugs on the shelf. The glasses are there too.';
+      return 'The cabinet is open. A few drinking glasses on the shelf. The mugs are there too.';
     },
     openable: true,
   },
@@ -2048,7 +2049,12 @@ function gameOpen(args) {
     if (cabinetOpen) { addLine('The cabinet is already open.'); return; }
     cabinetOpen = true;
     addLine('You open the cabinet.');
-    if (!gInventory.includes('mug')) addLine("There's a ceramic mug on the shelf inside.", 'dim');
+    const hasMug   = !gInventory.includes('mug');
+    const hasGlass = !gInventory.includes('glass');
+    if (hasMug && hasGlass) addLine('A few ceramic mugs and drinking glasses on the shelf.', 'dim');
+    else if (hasMug)        addLine('The mugs and glasses are on the shelf.', 'dim');
+    else if (hasGlass)      addLine('The glasses are still on the shelf.', 'dim');
+    else                    addLine('The mugs and glasses are still on the shelf.', 'dim');
     return;
   }
   if (/fridge|refrigerator|icebox/.test(word)) {
@@ -2083,8 +2089,8 @@ function gameOpen(args) {
     return;
   }
   if (/half.*(half|&)/.test(word)) { gameAddHalfAndHalf(); return; }
-  if (/coffee can|chase|sanborn|can of/.test(word)) { addLine("Pry the lid off and scoop the grounds in:  add grounds"); return; }
-  if (/filter box|box of filter|filters/.test(word)) { addLine("Pull one out:  take filter"); return; }
+  if (/coffee can|chase|sanborn|can of/.test(word)) { addLine("Pry off the lid and scoop the grounds into the filter."); return; }
+  if (/filter box|box of filter|filters/.test(word)) { addLine("Pull one out and add it to the basket."); return; }
   if (/door/.test(word)) { addLine("You're not going anywhere right now."); return; }
   addLine("You can't open that.");
 }
@@ -2185,8 +2191,20 @@ function checkBrew() {
   addLine('Fresh coffee.', 'dim');
 }
 
+function gameDumpMug() {
+  if (!gInventory.includes('mug')) { addLine("You don't have a mug."); return; }
+  if (!mugFilled) { addLine("The mug is already empty."); return; }
+  mugFilled  = false;
+  mugHasHalf = false;
+  addLine('You pour the coffee down the sink. The mug is empty.');
+}
+
 function gamePourOutCoffee() {
-  if (coffeePotState === 'empty') { addLine('The carafe is already empty.'); return; }
+  if (coffeePotState === 'empty') {
+    addLine('The carafe is already empty.');
+    if (mugFilled) addLine('Your mug still has old coffee in it.', 'dim');
+    return;
+  }
   if (coffeePotState === 'water' || coffeePotState === 'filter' || coffeePotState === 'grounds') {
     addLine("The carafe is already empty — you're partway through making a fresh pot.");
     return;
@@ -2195,6 +2213,8 @@ function gamePourOutCoffee() {
   coffeePotState = 'empty';
   addLine('You pull out the carafe and pour it into the sink.');
   addLine('Dark coffee swirls down the drain.', 'dim');
+  if (mugFilled) addLine('Your mug still has old coffee in it.', 'dim');
+  else           addLine('Fill the carafe with water next.', 'dim');
 }
 
 function gameFillCarafe() {
@@ -2207,6 +2227,7 @@ function gameFillCarafe() {
   coffeePotState = 'water';
   addLine('You fill the carafe from the faucet and pour it into the reservoir.');
   addLine('The water level climbs to the six-cup line.', 'dim');
+  addLine('Take a filter from the box on the counter and add it to the basket.', 'dim');
 }
 
 function gameAddFilter() {
@@ -2231,6 +2252,7 @@ function gameAddFilter() {
   if (f) f.hidden = true;
   coffeePotState = 'filter';
   addLine('You fold the filter into a cone and set it in the basket.');
+  addLine('Scoop in the grounds from the can.', 'dim');
 }
 
 function gameAddGrounds() {
@@ -2250,6 +2272,7 @@ function gameAddGrounds() {
   coffeePotState = 'grounds';
   addLine('You pry off the lid and scoop three measures of grounds into the filter.');
   addLine('The kitchen fills with the smell of coffee for a moment.', 'dim');
+  addLine('Ready to brew.', 'dim');
 }
 
 function gameStartBrew() {
@@ -2265,6 +2288,7 @@ function gameStartBrew() {
   brewChecked    = false;
   addLine('You slide the carafe into place and flip the switch.');
   addLine('The coffee maker clicks, hisses, and starts to gurgle.', 'dim');
+  addLine('Check back when it\'s done.', 'dim');
 }
 
 function gameFillGlass() {
@@ -3051,10 +3075,31 @@ function handleGameCommand(raw) {
   else if ((cmd === 'fill' || cmd === 'pour') && /mug|cup/.test(rest))       { gameFillMug(); }
   else if ((cmd === 'fill' || cmd === 'pour') && /glass|water/.test(rest))   { gameFillGlass(); }
   else if (cmd === 'get'   && /water/.test(rest))                            { gameFillGlass(); }
-  else if (cmd === 'pour'  && /coffee/.test(rest) && !gInventory.includes('half and half')) { gameFillMug(); }
+  else if (cmd === 'pour'  && /coffee/.test(rest) && !gInventory.includes('half and half')) {
+    if (mugFilled && (coffeePotState === 'old' || coffeePotState === 'fresh')) {
+      addLine("Your mug is already full.");
+      addLine("To start a fresh pot, dump the carafe first.", 'dim');
+    } else { gameFillMug(); }
+  }
   else if (cmd === 'get'   && /coffee/.test(rest))                           { gameFillMug(); }
   else if (cmd === 'drink' && /water|glass/.test(rest))                      { gameDrink(['water']); }
   // ── Fresh coffee steps ───────────────────────────────────────────────────
+  else if (cmd === 'make' && /coffee|pot|fresh|cup/.test(rest)) {
+    if      (coffeePotState === 'old' || coffeePotState === 'fresh')
+      addLine('Start by dumping the old pot.');
+    else if (coffeePotState === 'empty')
+      addLine('Fill the carafe from the faucet.');
+    else if (coffeePotState === 'water')
+      addLine(gInventory.includes('filter') ? 'Add the filter to the basket.' : 'Take a filter from the box on the counter.');
+    else if (coffeePotState === 'filter')
+      addLine('Scoop in the grounds.');
+    else if (coffeePotState === 'grounds')
+      addLine('Start the maker.');
+    else if (coffeePotState === 'brewing')
+      addLine("It's already going.");
+  }
+  else if ((cmd === 'dump' || cmd === 'empty') && /mug|cup/.test(rest))      { gameDumpMug(); }
+  else if (cmd === 'pour' && /out/.test(rest) && /mug|cup/.test(rest))       { gameDumpMug(); }
   else if ((cmd === 'pour' || cmd === 'dump' || cmd === 'empty' || cmd === 'discard') &&
            /coffee|pot|carafe|old/.test(rest))                               { gamePourOutCoffee(); }
   else if (cmd === 'fill' && /carafe|pot|reservoir|maker|coffee maker/.test(rest)) { gameFillCarafe(); }
@@ -3238,7 +3283,17 @@ function handleGameCommand(raw) {
         return;
       default:
         if (pv) { handleGameCommand(pv + ' ' + trimmed); return; }
-        addLine("That doesn't seem to do anything.", 'dim');
+        // Context-aware fallback — mid-process hints instead of a dead end
+        if      (coffeePotState === 'empty')                          addLine("The carafe's empty — still need to fill it with water.", 'dim');
+        else if (coffeePotState === 'water')                          addLine("Water's in the reservoir. Still need a filter in the basket.", 'dim');
+        else if (coffeePotState === 'filter')                         addLine("Filter's in. Still need the coffee grounds.", 'dim');
+        else if (coffeePotState === 'grounds')                        addLine("Everything's in. Start the maker.", 'dim');
+        else if (coffeePotState === 'brewing')                        addLine("Coffee's brewing. Check back in a minute.", 'dim');
+        else if (scrappleCooked)                                      addLine("The scrapple's done in the pan. Eat it before it gets cold.", 'dim');
+        else if (scrappleInPan && stoveOn && !scrappleCooked)         addLine("The scrapple's sizzling. It needs another minute or two.", 'dim');
+        else if (scrappleInPan && !stoveOn)                           addLine("The scrapple's in the pan. The stove is still off.", 'dim');
+        else if (floppyInserted && !floppyRead)                       addLine("There's a floppy disk in the drive. You can read what's on it.", 'dim');
+        else                                                          addLine("That doesn't seem to do anything.", 'dim');
     }
   }
 
