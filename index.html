@@ -997,7 +997,7 @@ const SCENERY = {
       return "The boombox is on. Nothing in the deck — just a hiss of static.";
     },
     toggle: true,
-    turnOn()  { boomBoxOn = true;  addLine('You click the boombox on. It hisses to life.'); },
+    turnOn()  { boomBoxOn = true;  addLine('You click the boombox on. It hisses to life.'); if (cassettePlaying) addLine('The tape starts rolling.', 'dim'); },
     turnOff() { boomBoxOn = false; cassettePlaying = null; addLine('You click the boombox off.'); },
   },
   vhsShelf: {
@@ -2038,12 +2038,12 @@ function gamePlay(args) {
 
   if (it.shelvedTape) {
     if (!gInventory.includes(it.id)) { addLine(`Take ${it.label} from the rack first.`); return; }
-    if (!boomBoxOn) { addLine("The boombox is off. Turn it on first."); return; }
-    if (cassettePlaying === it.label) { addLine(`${it.label} is already playing.`); return; }
+    if (cassettePlaying === it.label) { addLine(boomBoxOn ? `${it.label} is already playing.` : `${it.label} is already loaded.`); return; }
     if (cassettePlaying) addLine(`You swap out ${cassettePlaying} and pop in ${it.label}.`);
     else                 addLine(`You pop ${it.label} into the boombox.`);
     cassettePlaying = it.label;
-    addLine('The tape starts rolling.', 'dim');
+    if (boomBoxOn) addLine('The tape starts rolling.', 'dim');
+    else           addLine('Turn the boombox on to play.', 'dim');
     return;
   }
 
