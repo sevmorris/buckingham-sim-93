@@ -3272,8 +3272,9 @@ function handleGameCommand(raw) {
 
       // ── Coffee ───────────────────────────────────────────────────────────
       case 'fill': case 'pour':
-        if (gInventory.includes('glass')) gameFillGlass();
-        else gameFillMug();
+        if      (coffeePotState === 'empty')     gameFillCarafe();
+        else if (gInventory.includes('glass'))   gameFillGlass();
+        else                                     gameFillMug();
         break;
       case 'drink': case 'sip':                         gameDrink(args);       break;
 
