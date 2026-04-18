@@ -2128,6 +2128,11 @@ function gameDrink(args) {
     if (!beerItem) { addLine("You don't have a beer. Try the fridge."); return; }
     _drinkBeer(beerItem); return;
   }
+  if (/half.*(half|&)|creamer/.test(word)) {
+    addLine(gInventory.includes('half and half') ? "That goes in the coffee, not straight down." : "You don't have any.");
+    return;
+  }
+  if (/scrapple/.test(word)) { addLine("Scrapple goes in the pan. Not in a glass."); return; }
   addLine("You can't drink that.");
 }
 
@@ -2608,10 +2613,13 @@ function gameCook(args) {
     addLine("Cook what?"); return;
   }
   if (!scrappleInPan) {
-    if (gInventory.includes('scrapple'))
+    if (gInventory.includes('scrapple')) {
       addLine("Slice the scrapple into the pan first.  (try: put scrapple in pan)");
-    else
-      addLine("You need some scrapple. Check the fridge.");
+    } else {
+      const _sc = ITEMS.find(i => i.id === 'scrapple');
+      if (_sc && _sc.inFridge && !_sc.hidden) addLine("It's in the fridge. Take it out first.");
+      else addLine("You need some scrapple. Check the fridge.");
+    }
     return;
   }
   if (scrappleCooked) { addLine("It's already done. Eat it before it gets cold."); return; }
@@ -2643,9 +2651,14 @@ function gameEat(args) {
     if (scrappleInPan && stoveOn)  { addLine("It's still cooking. Give it a minute.  (try: cook)"); return; }
     if (scrappleInPan)             { addLine("The scrapple is in the pan but the stove is off. Turn it on first."); return; }
     if (gInventory.includes('scrapple')) { addLine("It's still raw. Slice it into the pan and cook it first."); return; }
+    const _sc = ITEMS.find(i => i.id === 'scrapple');
+    if (_sc && _sc.inFridge && !_sc.hidden) { addLine("It's in the fridge. Take it out, slice it into the pan, and cook it first."); return; }
     addLine("There's nothing to eat.");
     return;
   }
+  if (/beer|lager|yuengling|dock street|rolling rock/.test(word)) { addLine("You drink beer, you don't eat it."); return; }
+  if (/coffee|mug|cup/.test(word)) { addLine("You drink coffee, you don't eat it."); return; }
+  if (/water|glass/.test(word))    { addLine("You drink water, you don't eat it."); return; }
   addLine("You can't eat that.");
 }
 
