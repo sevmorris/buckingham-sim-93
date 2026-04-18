@@ -630,6 +630,62 @@ $3`,
    desc     : string or function returning string
    toggle   : true if  turn on / turn off  applies
 */
+
+// What you see/hear when something is actively playing
+const WATCH_DESC = {
+  'manhattan':           "Black and white city. Gershwin on the soundtrack. Isaac Davis making excuses for himself while New York fills the frame.",
+  'annie hall':          "Alvy Singer talking directly at the camera. The story moving backwards and sideways. The nervous charm that made this one famous.",
+  'stardust memories':   "Sandy Bates surrounded by admirers who all want something from him. Black and white. Bergman at arm's length.",
+  'hannah sisters':      "A family dinner. People talking in corners, making quiet mistakes. It moves slowly and feels lived-in.",
+  'crimes misdemeanors': "Judah Rosenthal composed at the dinner table. He's gotten away with something terrible. The film doesn't let you feel good about it.",
+  'faces of death':      "A narrator explains something over footage that's hard to look away from. Some of it is staged. Some of it isn't.",
+  'faces of death 2':    "More of the same. The same calm narrator's voice. You watch for a minute.",
+  'unlabeled 1':         "Seven's place in Virginia. A creek running over rocks. Bare trees, gray sky. The camera pans slowly downstream.",
+  'unlabeled 2':         "Seven's place in Virginia. A creek running over rocks. Bare trees, gray sky. The camera pans slowly downstream.",
+  'unlabeled 3':         "Seven's place in Virginia. A creek running over rocks. Bare trees, gray sky. The camera pans slowly downstream.",
+  'unlabeled 4':         "Seven's place in Virginia. A creek running over rocks. Bare trees, gray sky. The camera pans slowly downstream.",
+};
+
+const LISTEN_DESC = {
+  // Records
+  'abbey road':          "The medley running across the second side. Bass heavy and warm.",
+  'revolver':            "Something between pop and psychedelia. 'Tomorrow Never Knows' drifting in at the end.",
+  'rubber soul':         "Acoustic and restrained. Folk edges creeping in at the margins.",
+  'white album':         "Two records of everything — noise, ballads, rock, throwaway sketches. It goes on for a while.",
+  'sweetheart':          "Jangly guitars and a violin. Something cheerful underneath the weirdness.",
+  'let it be':           "Ragged and loose. Westerberg sounds like he's making it up as he goes. That's the point.",
+  'bollocks':            "Johnny Rotten sneering over three chords. Loud and fast and not sorry about any of it.",
+  'the clash lp':        "Raw and urgent. The UK pressing. It sounds better than the US one.",
+  'london calling':      "Bigger than the debut — reggae and rock and ska all bleeding together.",
+  'ramones':             "Twenty-nine minutes, fourteen songs, same four chords. Goes by fast.",
+  'marquee moon':        "Long interlocking guitar lines. Tom Verlaine's voice odd and exactly right for it.",
+  'horses':              "Somewhere between punk and poetry. 'Gloria' running into something older and stranger.",
+  'daydream nation':     "Walls of dissonant guitar. Thurston and Kim trading off. Long songs that don't overstay.",
+  'doolittle':           "Loud-quiet-loud. Black Francis screaming, then whispering. Joey Santiago's guitar all the way up.",
+  'dark side':           "Immersive and slow. Made for headphones but it sounds alright in a room.",
+  'close to the edge':   "One side of vinyl, one song, eighteen minutes. Yes doing what Yes does.",
+  'crimson king':        "Heavy and strange for 1969. The mellotron and the guitar doing uncomfortable things together.",
+  'thick as a brick':    "The whole record is one piece. Ian Anderson was twenty-four when he wrote it.",
+  'queen is dead':       "Morrissey in front of Marr's guitar. Literate and melodic. The title track runs six minutes.",
+  'psychocandy':         "Feedback layered over pop songs. The noise isn't obscuring anything — it is the thing.",
+  'damaged':             "Henry Rollins. Fast and angry. The whole record is done in half an hour.",
+  'fresh fruit':         "Jello Biafra sarcastic over surf guitars. Fast, funny, mean.",
+  // Cassettes
+  'unknown pleasures':   "Ian Curtis. Cold and minimal. The drum machine and the bass holding everything together.",
+  'disintegration':      "Long and slow and gothic. Robert Smith at his most sustained. The tape hisses a little.",
+  'fear of music':       "Angular rhythms, anxious lyrics. 'Life During Wartime.' The paranoia is the point.",
+  'entertainment':       "Post-punk with a groove. Bass-heavy and political. The guitar sounds like a rhythm instrument.",
+  'pink flag':           "Twenty-one songs in thirty-five minutes. Wire stripping everything down to the minimum.",
+  'some great reward':   "Synth pop, but darker than it sounds. 'People Are People.' 'Master and Servant.'",
+  'ocean rain':          "Sweeping and dramatic. The Bunnymen at their most orchestral.",
+  'in the flat field':   "Raw and gothic. Bauhaus before they got polished.",
+  'tim':                 "The Replacements almost mainstream and still completely themselves. Westerberg's best melodies.",
+  'zen arcade':          "Double cassette — Hüsker Dü playing fast and loud, then slow and sad. It takes a while.",
+  'parallel lines':      "Blondie at their best. Pop and punk meeting somewhere clean and precise.",
+  'this years model':    "Elvis Costello sharp and twitchy. The rhythm section tight. Everything too fast, in a good way.",
+  'wonderwear music':    "Local. You recognize a few songs from seeing them at the Khyber. The recording is rough.",
+};
+
 const SCENERY = {
   chair: {
     names: ['chair', 'desk chair', 'office chair'],
@@ -2111,8 +2167,9 @@ function gameWatch(args) {
   }
   if (!tvOn) { addLine("The TV is off."); return; }
   if (vhsPlaying) {
-    if (seated) addLine(`You watch from the sofa. ${vhsPlaying} is on.`);
-    else        addLine(`You stand in front of the TV. ${vhsPlaying} is playing.`);
+    addLine(seated ? `You watch from the sofa. ${vhsPlaying} is on.` : `You stand in front of the TV. ${vhsPlaying} is playing.`);
+    const wd = WATCH_DESC[vhsPlayingId];
+    if (wd) addLine(wd, 'dim');
     return;
   }
   if (seated) addLine("You watch from the sofa. Schultz suspects nothing. As usual.");
@@ -2130,11 +2187,18 @@ function gameListen(args) {
     if (recordPlaying && cassettePlaying) {
       addLine(`Both the turntable (${recordPlaying}) and the boombox (${cassettePlaying}) are going. It's a lot.`);
     } else if (recordPlaying) {
-      addLine(`${recordPlaying} is on the turntable. The record crackles softly between songs.`);
+      const rec = ITEMS.find(i => i.label === recordPlaying && i.shelved);
+      addLine(`${recordPlaying} is on the turntable.`);
+      if (rec && LISTEN_DESC[rec.id]) addLine(LISTEN_DESC[rec.id], 'dim');
+      else addLine('The record crackles softly between songs.', 'dim');
     } else if (cassettePlaying) {
+      const tape = ITEMS.find(i => i.label === cassettePlaying && i.shelvedTape);
       addLine(`${cassettePlaying} is playing on the boombox.`);
+      if (tape && LISTEN_DESC[tape.id]) addLine(LISTEN_DESC[tape.id], 'dim');
     } else if (tvOn && vhsPlaying) {
       addLine(`The VCR hums. ${vhsPlaying} is on.`);
+      const wd = WATCH_DESC[vhsPlayingId];
+      if (wd) addLine(wd, 'dim');
     } else if (tvOn) {
       addLine("The laugh track from Hogan's Heroes drifts over from the TV.");
     } else {
@@ -2143,20 +2207,38 @@ function gameListen(args) {
     return;
   }
   if (/record|turntable|vinyl|needle/.test(target)) {
-    if (recordPlaying) addLine(`${recordPlaying} is on the turntable. Sounds good.`);
-    else               addLine("The turntable is quiet. Put a record on.");
+    if (recordPlaying) {
+      const rec = ITEMS.find(i => i.label === recordPlaying && i.shelved);
+      addLine(`${recordPlaying} is on the turntable.`);
+      if (rec && LISTEN_DESC[rec.id]) addLine(LISTEN_DESC[rec.id], 'dim');
+      else addLine('Sounds good.', 'dim');
+    } else {
+      addLine("The turntable is quiet. Put a record on.");
+    }
     return;
   }
   if (/boombox|boom box|cassette|tape|stereo/.test(target)) {
-    if (cassettePlaying) addLine(`${cassettePlaying} is playing on the boombox.`);
-    else if (boomBoxOn)  addLine("The boombox is on but nothing's in the deck.");
-    else                 addLine("The boombox is off.");
+    if (cassettePlaying) {
+      const tape = ITEMS.find(i => i.label === cassettePlaying && i.shelvedTape);
+      addLine(`${cassettePlaying} is playing on the boombox.`);
+      if (tape && LISTEN_DESC[tape.id]) addLine(LISTEN_DESC[tape.id], 'dim');
+    } else if (boomBoxOn) {
+      addLine("The boombox is on but nothing's in the deck.");
+    } else {
+      addLine("The boombox is off.");
+    }
     return;
   }
   if (/tv|television|set|vcr|vhs/.test(target)) {
-    if (!tvOn)        addLine("The TV is off.");
-    else if (vhsPlaying) addLine(`The VCR hums. ${vhsPlaying} is on.`);
-    else              addLine("The laugh track from Hogan's Heroes.");
+    if (!tvOn) {
+      addLine("The TV is off.");
+    } else if (vhsPlaying) {
+      addLine(`The VCR hums. ${vhsPlaying} is on.`);
+      const wd = WATCH_DESC[vhsPlayingId];
+      if (wd) addLine(wd, 'dim');
+    } else {
+      addLine("The laugh track from Hogan's Heroes.");
+    }
     return;
   }
   if (/outside|street|window|traffic/.test(target)) {
