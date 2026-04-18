@@ -599,7 +599,9 @@ $3`,
   { id:'unlabeled 1',         label:'an unlabeled tape',         shelvedVHS:true, examDesc:"Plain black VHS shell. No label, no writing. You're not sure what's on it." },
   { id:'unlabeled 2',         label:'an unlabeled tape',         shelvedVHS:true, examDesc:"Plain black VHS shell. No label. A small scratch on the corner." },
   { id:'unlabeled 3',         label:'an unlabeled tape',         shelvedVHS:true, examDesc:"Plain black VHS shell. No label. The tape tab is broken off." },
-  { id:'letterman',           label:'a tape labeled "David Letterman"', shelvedVHS:true, examDesc:'Plain black VHS shell. A strip of masking tape on the spine with "DAVID LETTERMAN" written in marker. Home recording off the TV.' },
+  { id:'letterman',           label:'a tape labeled "David Letterman"', shelvedVHS:true, examDesc:'Plain black VHS shell. A strip of masking tape on the spine with "DAVID LETTERMAN" written in marker. Home recording off the TV.',
+    shortTitle: 'Late Night with David Letterman',
+    listenDesc: 'The VCR hums. Letterman does the Top 10 List. You hear the rain through the open kitchen window.' },
 
   // ── Dairy ────────────────────────────────────────────────────────────────
   { id:'half and half', label:'a carton of half & half', inFridge:true,
@@ -1014,7 +1016,7 @@ const SCENERY = {
     names: ['vcr', 'vhs player', 'video player', 'video recorder', 'vcr player'],
     desc() {
       if (!vcrOn) return 'A VCR stacked under the television. Power light off.';
-      if (vhsPlaying) return `The VCR is on. ${vhsPlaying} is loaded and playing.`;
+      if (vhsPlaying) return `The VCR is on. ${cap(vhsPlaying)} is loaded and playing.`;
       return 'The VCR is on. No tape loaded.';
     },
     toggle: true,
@@ -1091,8 +1093,9 @@ let lampOn       = true;    // lamp state
 let tvOn         = false;   // tv state
 let recordPlaying = null;   // label of record currently on turntable
 let cabinetOpen   = false;   // kitchen cabinet state
-let mugFilled     = false;   // whether the mug has coffee in it
-let mugHasHalf    = false;   // whether half & half has been added
+let mugFilled         = false; // whether the mug has coffee in it
+let mugHasHalf        = false; // whether half & half has been added
+let mugHasFreshCoffee = false; // mug was filled from the fresh pot
 let farted        = false;   // rank smell lingering in the room
 let glassFilled   = false;   // whether the glass has water in it
 let seated        = false;   // player is seated
@@ -1133,6 +1136,8 @@ function addLine(text = '', cls = '') {
 }
 
 function clearOutput() { outputEl.innerHTML = ''; }
+
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
 // ── Crypto helpers ────────────────────────────────────────────────────────
 async function deriveKey(password, salt) {
@@ -1519,8 +1524,9 @@ function startAdventure() {
   tvOn          = false;
   recordPlaying = null;
   cabinetOpen     = false;
-  mugFilled       = false;
-  mugHasHalf      = false;
+  mugFilled         = false;
+  mugHasHalf        = false;
+  mugHasFreshCoffee = false;
   glassFilled     = false;
   farted          = false;
   seated          = false;
@@ -1792,7 +1798,8 @@ function gameDrop(args) {
     raw = held[0].id;
   }
 
-  const it = gameItem(raw);
+  const it = ITEMS.find(i => gInventory.includes(i.id) && (i.id === raw || i.label.toLowerCase().includes(raw)))
+          || gameItem(raw);
   if (!it || !gInventory.includes(it.id)) { addLine("You're not carrying that."); return; }
   autoStand();
   gInventory = gInventory.filter(id => id !== it.id);
@@ -2170,7 +2177,9 @@ function gamePlayMessage() {
 
 function gameFillMug() {
   if (!gInventory.includes('mug')) {
-    addLine("You'll need a mug first. There might be one in the cabinet.");
+    const mug = ITEMS.find(i => i.id === 'mug');
+    if (mug && mug.dropped) addLine("Pick up the mug first.");
+    else addLine("You'll need a mug first. There might be one in the cabinet.");
     return;
   }
   if (mugFilled) { addLine('The mug is already full.'); return; }
@@ -2185,6 +2194,7 @@ function gameFillMug() {
   }
   mugFilled = true;
   if (coffeePotState === 'fresh') {
+    mugHasFreshCoffee = true;
     addLine('You pour a cup of fresh coffee. Still hot.');
   } else {
     addLine('You pour yourself a cup of coffee.');
@@ -2261,7 +2271,7 @@ function gameFillCarafe() {
   coffeePotState = 'water';
   addLine('You fill the carafe from the faucet and pour it into the reservoir.');
   addLine('The water level climbs to the six-cup line.', 'dim');
-  addLine('Take a filter from the box on the counter and add it to the basket.', 'dim');
+  addLine('Add a filter to the basket.', 'dim');
 }
 
 function gameAddFilter() {
@@ -2286,7 +2296,7 @@ function gameAddFilter() {
   if (f) f.hidden = true;
   coffeePotState = 'filter';
   addLine('You fold the filter into a cone and set it in the basket.');
-  addLine('Scoop in the grounds from the can.', 'dim');
+  addLine('Add grounds to the filter.', 'dim');
 }
 
 function gameAddGrounds() {
@@ -2372,10 +2382,11 @@ function gameDrink(args) {
 }
 
 function _drinkCoffee() {
-  if (mugHasHalf) addLine('You take a sip. Lukewarm, a little sweet. Better with the half & half.');
-  else            addLine('You take a sip. Lukewarm, a little bitter. Still hits the spot.');
-  mugFilled  = false;
-  mugHasHalf = false;
+  if (mugHasFreshCoffee && mugHasHalf) addLine('You take a sip. Hot and sweet. Good call on the half & half.');
+  else if (mugHasFreshCoffee)          addLine('You take a sip. Hot and sharp. Good.');
+  else if (mugHasHalf)                 addLine('You take a sip. Lukewarm, a little sweet. Better with the half & half.');
+  else                                 addLine('You take a sip. Lukewarm, a little bitter. Still hits the spot.');
+  mugFilled = false; mugHasHalf = false; mugHasFreshCoffee = false;
 }
 
 function gameAddHalfAndHalf() {
@@ -2436,7 +2447,7 @@ function gameSit(args) {
   if (where === 'chair') {
     addLine('You drop into the desk chair and roll up to the monitor.');
   } else {
-    if (vhsPlaying && tvOn) addLine(`You sink into the sofa. Cracker shifts and presses against your leg. ${vhsPlaying} is on.`);
+    if (vhsPlaying && tvOn) addLine(`You sink into the sofa. Cracker shifts and presses against your leg. ${cap(vhsPlaying)} is on.`);
     else if (tvOn)          addLine("You sink into the sofa. Cracker shifts and presses against your leg. You watch Hogan's Heroes.");
     else                    addLine('You sink into the sofa. Cracker shifts and presses against your leg. The room is quiet.');
   }
@@ -2564,7 +2575,11 @@ function gameWatch(args) {
   }
   if (!tvOn) { addLine("The TV is off."); return; }
   if (vhsPlaying) {
-    addLine(seated ? `You watch from the sofa. ${vhsPlaying} is on.` : `You stand in front of the TV. ${vhsPlaying} is playing.`);
+    const vhsIt    = ITEMS.find(i => i.id === vhsPlayingId);
+    const watchLine = seated
+      ? (vhsIt?.shortTitle ? `You watch ${vhsIt.shortTitle} from the sofa.` : `You watch from the sofa. ${cap(vhsPlaying)} is on.`)
+      : `You stand in front of the TV. ${cap(vhsPlaying)} is playing.`;
+    addLine(watchLine);
     const wd = WATCH_DESC[vhsPlayingId];
     if (wd) addLine(wd, 'dim');
     return;
@@ -2593,9 +2608,9 @@ function gameListen(args) {
       addLine(`${cassettePlaying} is playing on the boombox.`);
       if (tape && LISTEN_DESC[tape.id]) addLine(LISTEN_DESC[tape.id], 'dim');
     } else if (tvOn && vhsPlaying) {
-      addLine(`The VCR hums. ${vhsPlaying} is on.`);
-      const wd = WATCH_DESC[vhsPlayingId];
-      if (wd) addLine(wd, 'dim');
+      const vhsIt = ITEMS.find(i => i.id === vhsPlayingId);
+      if (vhsIt?.listenDesc) { addLine(vhsIt.listenDesc, 'dim'); }
+      else { addLine(`The VCR hums. ${cap(vhsPlaying)} is on.`); const wd = WATCH_DESC[vhsPlayingId]; if (wd) addLine(wd, 'dim'); }
     } else if (tvOn) {
       addLine("The laugh track from Hogan's Heroes drifts over from the TV.");
       addLine("Rain against the windows underneath it.", 'dim');
@@ -2631,9 +2646,9 @@ function gameListen(args) {
     if (!tvOn) {
       addLine("The TV is off.");
     } else if (vhsPlaying) {
-      addLine(`The VCR hums. ${vhsPlaying} is on.`);
-      const wd = WATCH_DESC[vhsPlayingId];
-      if (wd) addLine(wd, 'dim');
+      const vhsIt = ITEMS.find(i => i.id === vhsPlayingId);
+      if (vhsIt?.listenDesc) { addLine(vhsIt.listenDesc, 'dim'); }
+      else { addLine(`The VCR hums. ${cap(vhsPlaying)} is on.`); const wd = WATCH_DESC[vhsPlayingId]; if (wd) addLine(wd, 'dim'); }
     } else {
       addLine("The laugh track from Hogan's Heroes.");
     }
@@ -2955,7 +2970,7 @@ function gameStop(args) {
   if (isVCR || (isGeneric && vhsPlaying && !recordPlaying && !cassettePlaying)) {
     if (!vhsPlaying) { addLine("The VCR isn't playing anything."); return; }
     const was = vhsPlaying; vhsPlaying = null; vhsPlayingId = null;
-    addLine(`You stop the VCR. ${was} winds down.`);
+    addLine(`You stop the VCR. ${cap(was)} winds down.`);
     return;
   }
   if (isTurntable || (isGeneric && recordPlaying && !cassettePlaying)) {
@@ -3157,6 +3172,7 @@ function handleGameCommand(raw) {
   else if (cmd === 'throw' && args[0] === 'away')                            { gameThrowAway(args.slice(1)); }
   else if (cmd === 'throw' && /trash|garbage|bin|away|out/.test(rest))       { gameThrowAway(args); }
   else if ((cmd === 'toss' || cmd === 'discard') && rest)                     { gameThrowAway(args); }
+  else if ((cmd === 'wash' || cmd === 'clean') && /dish|dishes|plate|plates/.test(rest)) { addLine('You run the water and wash the few dishes in the sink. They can air dry.'); }
   else if ((cmd === 'dump' || cmd === 'empty') && /mug|cup/.test(rest))      { gameDumpMug(); }
   else if (cmd === 'pour' && /out/.test(rest) && /mug|cup/.test(rest))       { gameDumpMug(); }
   else if ((cmd === 'pour' || cmd === 'dump' || cmd === 'empty' || cmd === 'discard') &&
@@ -3178,7 +3194,7 @@ function handleGameCommand(raw) {
   else if (cmd === 'channel' || (cmd === 'switch' && /channel|input|vcr|aux/.test(rest)) ||
            (cmd === 'tune'   && /channel|vcr|aux/.test(rest))) {
     if (!tvOn) { addLine("The TV is off."); }
-    else if (vhsPlaying) addLine(`The VCR is already coming through. ${vhsPlaying} is on screen.`);
+    else if (vhsPlaying) addLine(`The VCR is already coming through. ${cap(vhsPlaying)} is on screen.`);
     else if (vcrOn)      addLine("The VCR is wired into channel 3. Turn it on and load a tape to watch.");
     else                 addLine("The VCR is wired into channel 3. Turn on the VCR first.");
   }
@@ -3219,11 +3235,13 @@ function handleGameCommand(raw) {
       case 'message': case 'messages': case 'voicemail': gamePlayMessage();   break;
 
       // ── Floppy ───────────────────────────────────────────────────────────
-      case 'insert': case 'load':
-        if      (ITEMS.some(i => i.shelvedVHS  && gInventory.includes(i.id))) gameInsertVHS();
-        else if (ITEMS.some(i => i.shelvedTape && gInventory.includes(i.id))) gameInsertCassette();
-        else gameInsertFloppy();
+      case 'insert': case 'load': {
+        const hasNonPlayingVHS = ITEMS.some(i => i.shelvedVHS && gInventory.includes(i.id) && i.id !== vhsPlayingId);
+        if      (hasNonPlayingVHS)                                               gameInsertVHS();
+        else if (ITEMS.some(i => i.shelvedTape && gInventory.includes(i.id)))    gameInsertCassette();
+        else                                                                     gameInsertFloppy();
         break;
+      }
       case 'eject':  case 'remove':                     floppyInserted ? gameEjectFloppy() : gameEjectVHS(); break;
 
       // ── VCR ──────────────────────────────────────────────────────────────
