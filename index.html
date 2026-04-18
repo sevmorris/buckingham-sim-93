@@ -714,6 +714,25 @@ const LISTEN_DESC = {
   'wonderwear music':    "'Wasted By The Pool.' You and Seven recorded this one. You know every part.",
 };
 
+const READ_DESC = {
+  'lot 49':          ["You sit down with it. Oedipa Maas, the Tristero, the slow creep of a conspiracy that might be nothing at all.", "Pynchon keeps you off-balance the whole time. You lose track of how long you've been reading."],
+  'slaughterhouse':  ["You find your page — Billy Pilgrim has come unstuck in time again. So it goes.", "The war and the absurdity of the war. Vonnegut writing around Dresden the way you'd write around something you can't look at directly. You read for a while, then just sit with it."],
+  'confederacy':     ["Ignatius J. Reilly is outraged about something — he always is. You settle into the sofa and let him roll.", "John Kennedy Toole wrote this in the sixties and never saw it published. His mother spent years getting it out. You think about that sometimes."],
+  'ask the dust':    ["Arturo Bandini in a Los Angeles rooming house, broke and certain he's a genius. You open to a random page.", "Fante writing about hunger and longing and the city as a place that doesn't care about either. You read until the rain sounds like something else."],
+  'naked lunch':     ["You open it somewhere in the middle. That's probably the right approach.", "Burroughs cutting the text apart and reassembling it. The logic is its own kind of logic. You read for a while before you realize you've stopped following and are just watching the sentences."],
+  'white noise':     ["Jack Gladney, Hitler Studies, the supermarket. DeLillo circling the idea of death the way a dog circles before lying down.", "The Airborne Toxic Event is still ahead somewhere. Or maybe behind. You read a chapter and set it on the cushion beside you."],
+  'less than zero':  ["Clay is back in L.A. for winter break. Parties, people who look good, a general feeling that nothing means anything.", "Ellis writes it flat — no judgment, no warmth. Just surfaces. You read faster than you mean to and put it down feeling a little empty, which is probably the point."],
+  'blood meridian':  ["The Judge holds court over something violent and ancient. McCarthy's sentences go long and then stop.", "You read a few pages and feel the weight of it. Not the kind of book you pick up casually. You close it carefully and set it aside."],
+  'moviegoer':       ["Binx Bolling in New Orleans, watching movies, looking for something he can't name. Walker Percy calling it 'the search.'", "The prose is easy and the ideas are heavy and neither gets in the way of the other. You read until the rain pulls you back."],
+  'screen trade':    ["Goldman on the studios, the executives, the writers who get chewed up. 'Nobody knows anything.' He means it.", "The anecdote about Butch Cassidy is in here somewhere — you flip through looking for it. You end up reading three other sections first."],
+  'syd field':       ["Act One, Act Two, Act Three. The paradigm. You've read this enough times to know which parts you skip.", "You flip to the section on the midpoint. There's an old coffee ring on the page from the last time you read it here."],
+  'film art':        ["You open to a chapter on cinematography and find your own notes in the margin — from when, you're not sure.", "Bordwell and Thompson explaining mise-en-scène carefully, with stills. You follow an argument about deep focus for a few pages before your mind wanders back to your own shot list."],
+  'five cs':         ["You look up composition. Mascelli explains the rule of thirds with simple diagrams. You look at the room and apply it.", "Old book. The language is from another era but the geometry doesn't change."],
+  'bresson':         ["'The faculty of using my resources well diminishes when their number grows.' You read it twice.", "Short paragraphs. More like notes than chapters. You read ten pages in five minutes, then stop and think for longer than that."],
+  'grammar of film': ["You turn to a section on eyeline matches and work through the diagrams. Six different angles for a two-person conversation.", "You use this more like a reference than a book — flip to what you need, study it, close it. That's what you do now."],
+  'film editing':    ["A Kurosawa example — the scene, the cut, the effect. Reisz explaining what the cut does and why.", "You read about rhythm and duration. About how long to hold a shot. You find yourself thinking about the difference between cutting on action and cutting on emotion."],
+};
+
 const SCENERY = {
   chair: {
     names: ['chair', 'desk chair', 'office chair'],
@@ -1695,7 +1714,12 @@ function gameDrop(args) {
 }
 
 function gameRead(args) {
-  if (!args.length) { pendingVerb = 'read'; addLine('Read what?'); return; }
+  if (!args.length) {
+    // Infer from a held book
+    const heldBook = ITEMS.find(it => it.shelvedBook && gInventory.includes(it.id));
+    if (heldBook) { gameRead([heldBook.id]); return; }
+    pendingVerb = 'read'; addLine('Read what?'); return;
+  }
   const word = args.join(' ');
 
   // Floppy / letter.txt — reads from drive
@@ -1740,6 +1764,25 @@ function gameRead(args) {
   if (it.inFridge        && !fridgeOpen)        { addLine("You don't see that here."); return; }
   if (it.inDrawer        && !drawerOpen)        { addLine("You don't see that here."); return; }
   if (it.inKitchenDrawer && !kitchenDrawerOpen) { addLine("You don't see that here."); return; }
+
+  // Books: reading experience
+  if (it.shelvedBook) {
+    if (!gInventory.includes(it.id)) { addLine(`You'd need to take it off the shelf first.`); return; }
+    const desc = READ_DESC[it.id];
+    lastItem = it.id;
+    if (!seated) { addLine('You settle onto the sofa.'); seated = true; }
+    addLine('');
+    if (desc) {
+      addLine(desc[0]);
+      if (desc[1]) { addLine(''); addLine(desc[1]); }
+    } else {
+      addLine(`You read for a while. The rain keeps on.`);
+    }
+    addLine('');
+    addLine(`You set ${it.label} down on the cushion beside you.`, 'dim');
+    return;
+  }
+
   if (!it.content) { addLine(`There's nothing to read on ${it.label}.`); return; }
   lastItem = it.id;
   addLine('');
