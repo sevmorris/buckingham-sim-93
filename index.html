@@ -1370,7 +1370,10 @@ function cmdHelp() {
 
 function cmdLogout() {
   // Reset game state so a new session starts fresh
-  gInventory = [];
+  gInventory   = [];
+  lastItem     = null;
+  lastScenery  = null;
+  pendingVerb  = null;
   for (const it of ITEMS) {
     if (Object.prototype.hasOwnProperty.call(it, '_origHidden'))
       it.hidden = it._origHidden;
@@ -1573,7 +1576,6 @@ function gameLook() {
 
 function gameTake(args) {
   if (!args.length) { pendingVerb = 'take'; addLine('Take what?'); return; }
-  autoStand();
   const word = args.join(' ');
 
   // Taking a single pen from the desk cup
@@ -1581,6 +1583,7 @@ function gameTake(args) {
     if (gInventory.includes('pen')) { addLine("You already have a pen."); return; }
     const penItem = ITEMS.find(it => it.id === 'pen');
     penItem.hidden = false;
+    autoStand();
     gInventory.push('pen');
     lastItem = 'pen';
     addLine('You take one of the pens.');
@@ -1591,7 +1594,7 @@ function gameTake(args) {
   if (/^(record|a record|the record)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelved && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no records left on the shelf.'); return; }
-    if (available.length === 1) { gInventory.push(available[0].id); addLine(`You take ${available[0].label} off the shelf.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} off the shelf.`); }
     else { addLine('Which record?'); for (const r of available) addLine(`  ${r.label}`); }
     return;
   }
@@ -1600,7 +1603,7 @@ function gameTake(args) {
   if (/^(cassette|tape|a cassette|a tape)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelvedTape && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no cassettes on the shelf.'); return; }
-    if (available.length === 1) { gInventory.push(available[0].id); addLine(`You take ${available[0].label} from the rack.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} from the rack.`); }
     else { addLine('Which tape?'); for (const t of available) addLine(`  ${t.label}`); }
     return;
   }
@@ -1609,7 +1612,7 @@ function gameTake(args) {
   if (/^(vhs|video|vhs tape|a vhs|the vhs|video tape|a video|a video tape)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelvedVHS && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no VHS tapes on the shelf.'); return; }
-    if (available.length === 1) { gInventory.push(available[0].id); addLine(`You take ${available[0].label} off the shelf.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} off the shelf.`); }
     else { addLine('Which tape?'); for (const v of available) addLine(`  ${v.label}`); }
     return;
   }
@@ -1618,7 +1621,7 @@ function gameTake(args) {
   if (/^(book|a book|the book)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelvedBook && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no books left on the shelf.'); return; }
-    if (available.length === 1) { gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} off the shelf.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} off the shelf.`); }
     else { addLine('Which book?'); for (const b of available) addLine(`  ${b.label}`); }
     return;
   }
@@ -1626,9 +1629,9 @@ function gameTake(args) {
   // Generic "beer"
   if (/^(beer|a beer|the beer)$/.test(word)) {
     if (!fridgeOpen) { addLine('The fridge is closed.'); return; }
-    const available = ITEMS.filter(it => it.inFridge && !gInventory.includes(it.id));
-    if (!available.length) { addLine("There's nothing cold left."); return; }
-    if (available.length === 1) { available[0].inFridge = false; gInventory.push(available[0].id); addLine(`You grab ${available[0].label} from the fridge.`); }
+    const available = ITEMS.filter(it => it.inFridge && it.drinkable && !gInventory.includes(it.id));
+    if (!available.length) { addLine("There's no beer left."); return; }
+    if (available.length === 1) { autoStand(); available[0].inFridge = false; gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You grab ${available[0].label} from the fridge.`); }
     else { addLine('Which one?'); for (const b of available) addLine(`  ${b.label}`); }
     return;
   }
@@ -1641,6 +1644,7 @@ function gameTake(args) {
     if (fl.inDrawer && !drawerOpen) { addLine('The drawer is closed.'); return; }
     const wasInDrawer = fl.inDrawer;
     fl.inDrawer = false;
+    autoStand();
     gInventory.push('floppy');
     addLine(wasInDrawer ? 'You take the floppy disk from the drawer.' : 'You pick up the floppy disk.');
     lastItem = 'floppy';
@@ -1665,6 +1669,7 @@ function gameTake(args) {
   it.inKitchenDrawer = false;
   const wasDrop = it.dropped;
   it.dropped   = false;
+  autoStand();
   gInventory.push(it.id);
   if (wasDrop)                  addLine(`You pick up ${it.label}.`);
   else if (it.shelved)          addLine(`You take ${it.label} off the shelf.`);
@@ -1704,13 +1709,22 @@ function gameDrop(args) {
     if (!held.length) { addLine("You're not carrying a VHS tape."); return; }
     if (held.length > 1) { addLine('Which tape?'); for (const v of held) addLine(`  ${v.label}`); return; }
     raw = held[0].id;
+  } else if (/^(beer|a beer|the beer)$/.test(raw)) {
+    const held = ITEMS.filter(it => it.drinkable && gInventory.includes(it.id));
+    if (!held.length) { addLine("You're not carrying a beer."); return; }
+    if (held.length > 1) { addLine('Which one?'); for (const b of held) addLine(`  ${b.label}`); return; }
+    raw = held[0].id;
   }
 
   const it = gameItem(raw);
   if (!it || !gInventory.includes(it.id)) { addLine("You're not carrying that."); return; }
   autoStand();
   gInventory = gInventory.filter(id => id !== it.id);
-  it.dropped = true;
+  it.dropped         = true;
+  it.inCabinet       = false;
+  it.inFridge        = false;
+  it.inDrawer        = false;
+  it.inKitchenDrawer = false;
   // Stop playback if the item was active
   if (it.shelved && recordPlaying === it.label) {
     recordPlaying = null;
@@ -1805,14 +1819,6 @@ function gameRead(args) {
   lastItem = it.id;
   addLine('');
   for (const line of it.content.split('\n')) addLine(line);
-  if (it.reveals) {
-    const revealed = ITEMS.find(i => i.id === it.reveals);
-    if (revealed && revealed.hidden) {
-      revealed.hidden = false;
-      addLine('');
-      addLine(revealed.roomDesc, 'dim');
-    }
-  }
 }
 
 function gameExamine(args) {
@@ -2140,7 +2146,7 @@ function gameAddHalfAndHalf() {
   mugHasHalf = true;
   gInventory = gInventory.filter(id => id !== 'half and half');
   const it = ITEMS.find(i => i.id === 'half and half');
-  if (it) it.dropped = true;
+  if (it) it.hidden = true;
   addLine('You tip in the last of it. The coffee goes pale.');
 }
 
