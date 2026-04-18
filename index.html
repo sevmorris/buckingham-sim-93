@@ -451,12 +451,9 @@ exec /usr/local/bin/buckingham`
    MOTD — shown on startup
    ════════════════════════════════════════════════════════════════════════════ */
 const MOTD = `
-Welcome to Buckingham Place.
+SunOS Release 4.1.3 (owl)  #1: Fri Sep 10 09:22:47 EDT 1993
 
-Philadelphia, October 1993.  It's raining — one of those late summer showers that keeps you inside.
-
-You've just woken up in your West Philly apartment.
-Nothing on the agenda.  Nowhere you need to be.
+Last login: Mon Oct  4 22:31:09 on ttyp0
 
 Type  buckingham  to play.
 `;
@@ -1467,7 +1464,11 @@ function startAdventure() {
   }
 
   addLine('');
-  addLine('Loading...', 'dim');
+  addLine('Welcome to Buckingham Place.', 'hi');
+  addLine('');
+  addLine("Philadelphia, October 1993.  It's raining — one of those late summer showers that keeps you inside.");
+  addLine("You've just woken up in your West Philly apartment.");
+  addLine("Nothing on the agenda.  Nowhere you need to be.");
   addLine('');
   addLine('──────────────────────────────────────────────────────────────────', 'dim');
   addLine('');
