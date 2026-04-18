@@ -631,7 +631,8 @@ $3`,
   // ── Dairy ────────────────────────────────────────────────────────────────
   { id:'half and half', label:'a carton of half & half', inFridge:true,
     examDesc:    "Half & half. You give it a shake. Nearly empty — maybe two pours left.",
-    examThought: "You should probably walk to Acme today. Or Theft Way, if you feel like the trip." },
+    examThought: "You should probably walk to Acme today. Or Theft Way, if you feel like the trip.",
+    takeNote:    "Nearly empty." },
 
   // ── Beer (inFridge: true — only accessible when fridge is open) ──────────
   { id:'yuengling',     label:'a Yuengling Lager',    inFridge:true, drinkable:true, examDesc:'Yuengling Traditional Lager. Pottsville, PA. Oldest brewery in America. Cold.' },
@@ -1701,6 +1702,7 @@ function gameTake(args) {
   else if (wasInKitchenDrawer)  addLine(`You take ${it.label} from the kitchen drawer.`);
   else                          addLine(`You pick up ${it.label}.`);
   lastItem = it.id;
+  if (it.takeNote) addLine(it.takeNote, 'dim');
 }
 
 function gameDrop(args) {
