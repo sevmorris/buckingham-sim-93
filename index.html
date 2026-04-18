@@ -2047,11 +2047,23 @@ function gameGo(args) {
     addLine(typeof SCENERY.shelf.desc === 'function' ? SCENERY.shelf.desc() : SCENERY.shelf.desc);
     return;
   }
-  if (/^(north|bookshelf|books|vhs|videos|video shelf|vhs shelf|videotapes)$/.test(dest)) {
+  if (/^tapes?$/.test(dest)) {
+    addLine('Which tapes — cassettes or VHS?');
+    return;
+  }
+  if (/^(north|bookshelf|books)$/.test(dest)) {
     playerArea = 'north';
     addLine('You walk to the north shelves.');
     addLine('');
     addLine(typeof SCENERY.book.desc === 'function' ? SCENERY.book.desc() : SCENERY.book.desc);
+    return;
+  }
+  if (/^(vhs|vhs shelf|vhs tapes|vhs collection|videos|videotapes|video shelf|video tapes|video collection)$/.test(dest)) {
+    playerArea = 'north';
+    addLine('You walk to the VHS shelf.');
+    addLine('');
+    addLine(typeof SCENERY.vhsShelf.desc === 'function' ? SCENERY.vhsShelf.desc() : SCENERY.vhsShelf.desc);
+    lastScenery = 'vhs shelf';
     return;
   }
   if (/^(ne|northeast|boombox|cassettes|cassette shelf|cassette rack|back bedroom)$/.test(dest)) {
