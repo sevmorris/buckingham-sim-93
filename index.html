@@ -811,7 +811,7 @@ const SCENERY = {
   fridge: {
     names: ['fridge', 'refrigerator', 'icebox', 'ice box', 'leftovers', 'foil'],
     desc() {
-      if (!fridgeOpen) return 'A humming refrigerator against the kitchen wall. Takeout menus held up by magnets — Jade Palace, a few others.';
+      if (!fridgeOpen) return 'A humming refrigerator against the kitchen wall. A few takeout menus held up by magnets.';
       const items = ITEMS.filter(it => it.inFridge && !gInventory.includes(it.id));
       const listed = items.map(it => it.label).join(', ');
       return listed
