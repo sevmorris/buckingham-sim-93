@@ -974,6 +974,7 @@ let scrappleInPan     = false; // scrapple has been sliced into the pan
 let scrappleCooked    = false; // scrapple is fully cooked and ready to eat
 let ejectNudged   = false;   // eject nudge has been shown once since reading
 let playerArea    = null;    // rough location: null=general, 'desk', 'sofa', 'kitchen', 'shelf', 'north'
+let lastScenery   = null;    // last scenery name — 'it'/'that' resolves to this when no lastItem
 let vcrOn         = false;   // VCR power state
 let vhsPlaying    = null;    // label of VHS currently playing (for display)
 let vhsPlayingId  = null;    // id of VHS currently playing (for item identity)
@@ -1385,6 +1386,7 @@ function startAdventure() {
   awaitingSitTarget  = false;
   pendingVerb        = null;
   lastItem           = null;
+  lastScenery        = null;
   floppyUnlocked     = false;
   kitchenDrawerOpen = false;
   stoveOn           = false;
@@ -1666,7 +1668,7 @@ function gameExamine(args) {
 
   // Check scenery first
   const sc = findScenery(word);
-  if (sc) { addLine(typeof sc.desc === 'function' ? sc.desc() : sc.desc); return; }
+  if (sc) { lastScenery = sc.names[0]; addLine(typeof sc.desc === 'function' ? sc.desc() : sc.desc); return; }
 
   // Then items
   const it = gameItem(word);
@@ -1704,6 +1706,13 @@ function gamePlay(args) {
 
   // Generic play shorthands — find what's in hand
   let it = gameItem(word);
+
+  // For generic terms, prefer whatever the player is actually holding
+  if (it && !gInventory.includes(it.id) && /^(tape|cassette|record|vhs|video|movie|film)$/.test(word)) {
+    const inHand = ITEMS.find(i => (i.shelved || i.shelvedTape || i.shelvedVHS) && gInventory.includes(i.id));
+    if (inHand) it = inHand;
+  }
+
   if (!it && /^(record|it|this|the record|tape|cassette)$/.test(word)) {
     it = ITEMS.find(i => (i.shelved || i.shelvedTape) && gInventory.includes(i.id));
     if (!it && /^(tape|cassette)$/.test(word)) {
@@ -1824,6 +1833,15 @@ function gameInsertFloppy() {
   addLine('You slide the floppy into the drive.');
   addLine('The drive light blinks. The disk spins up.', 'dim');
   addLine('Type  read floppy  to access the file.', 'dim');
+}
+
+function gameInsertVHS() {
+  autoStand();
+  if (!vcrOn) { addLine('The VCR is off. Turn it on first.'); return; }
+  if (vhsPlayingId) { addLine("There's already a tape in the VCR. Eject it first."); return; }
+  const tape = ITEMS.find(i => i.shelvedVHS && gInventory.includes(i.id));
+  if (!tape) { addLine("You're not holding a VHS tape."); return; }
+  gamePlay([tape.id]);
 }
 
 function gameEjectFloppy() {
@@ -2017,6 +2035,7 @@ function gameGo(args) {
     if (kitchenThings.test(dest))   playerArea = 'kitchen';
     else if (deskThings.test(dest)) playerArea = 'desk';
     const prefix = kitchenThings.test(dest) ? 'You step into the kitchen.' : 'You walk over.';
+    lastScenery = sc.names[0];
     addLine(prefix);
     addLine('');
     addLine(typeof sc.desc === 'function' ? sc.desc() : sc.desc);
@@ -2461,10 +2480,11 @@ function handleGameCommand(raw) {
   const pv = pendingVerb;
   pendingVerb = null;
 
-  // Pronoun substitution: 'it'/'that'/'this' → last mentioned item
+  // Pronoun substitution: 'it'/'that'/'this' → last item, or last scenery as fallback
   const pronounSub = (str) => {
-    if (!lastItem) return str;
-    return str.replace(/\bit\b|\bthat\b|\bthis\b|\bone\b/g, lastItem);
+    if (lastItem)    return str.replace(/\bit\b|\bthat\b|\bthis\b|\bone\b/g, lastItem);
+    if (lastScenery) return str.replace(/\bit\b|\bthat\b|\bthis\b/g, lastScenery);
+    return str;
   };
   const subbed  = pronounSub(trimmed);
 
@@ -2498,6 +2518,7 @@ function handleGameCommand(raw) {
   else if (cmd === 'press'  && /play/.test(rest))                       { gamePlayMessage(); }
   else if (cmd === 'pick'   && /phone|up the phone/.test(rest))         { addLine('You pick up the receiver. Dial tone.'); }
   else if (cmd === 'hang'   && /up/.test(rest))                         { addLine('You set the receiver back down.'); }
+  else if ((cmd === 'insert' || cmd === 'load') && /vhs|tape|video|cassette/.test(rest)) { gameInsertVHS(); }
   else if (cmd === 'insert' && /floppy|disk/.test(rest))                { gameInsertFloppy(); }
   else if (cmd === 'eject'  && /floppy|disk/.test(rest))                { gameEjectFloppy(); }
   else if (cmd === 'remove' && /floppy|disk/.test(rest))                { gameEjectFloppy(); }
@@ -2551,7 +2572,9 @@ function handleGameCommand(raw) {
       case 'message': case 'messages': case 'voicemail': gamePlayMessage();   break;
 
       // ── Floppy ───────────────────────────────────────────────────────────
-      case 'insert': case 'load':                       gameInsertFloppy();   break;
+      case 'insert': case 'load':
+        ITEMS.some(it => it.shelvedVHS && gInventory.includes(it.id)) ? gameInsertVHS() : gameInsertFloppy();
+        break;
       case 'eject':  case 'remove':                     floppyInserted ? gameEjectFloppy() : gameEjectVHS(); break;
 
       // ── VCR ──────────────────────────────────────────────────────────────
@@ -2708,6 +2731,13 @@ function hideCRTLetter() {
 
 crtOverlayEl.addEventListener('click', () => {
   if (crtOverlayEl.classList.contains('visible')) hideCRTLetter();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (crtOverlayEl.classList.contains('visible')) {
+    e.preventDefault();
+    hideCRTLetter();
+  }
 });
 
 // ── Input event handler ────────────────────────────────────────────────────
