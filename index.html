@@ -691,7 +691,12 @@ const SCENERY = {
       return "A boxy television. Channel 17 — Hogan's Heroes. The laugh track echoes off the walls.";
     },
     toggle: true,
-    turnOn()  { tvOn = true;  addLine("You click the TV on. Channel 17. Hogan's Heroes."); },
+    turnOn()  {
+      tvOn = true;
+      if (vhsPlaying) addLine(`You click the TV on. The VCR is already running — ${vhsPlaying} comes up on screen.`);
+      else if (vcrOn) addLine("You click the TV on. The VCR is on — pop in a tape to watch something.");
+      else            addLine("You click the TV on. Channel 17. Hogan's Heroes.");
+    },
     turnOff() { tvOn = false; addLine('You click the TV off. Silence.'); },
   },
   shelf: {
@@ -2577,6 +2582,14 @@ function handleGameCommand(raw) {
   else if ((cmd === 'fill' || cmd === 'pour') && /mug|cup/.test(rest))  { gameFillMug(); }
   else if (cmd === 'pour'  && /coffee/.test(rest))                      { gameFillMug(); }
   else if (cmd === 'get'   && /coffee/.test(rest))                      { gameFillMug(); }
+  // ── TV channel / input switching ────────────────────────────────────────
+  else if (cmd === 'channel' || (cmd === 'switch' && /channel|input|vcr|aux/.test(rest)) ||
+           (cmd === 'tune'   && /channel|vcr|aux/.test(rest))) {
+    if (!tvOn) { addLine("The TV is off."); }
+    else if (vhsPlaying) addLine(`The VCR is already coming through. ${vhsPlaying} is on screen.`);
+    else if (vcrOn)      addLine("The VCR is wired into channel 3. Turn it on and load a tape to watch.");
+    else                 addLine("The VCR is wired into channel 3. Turn on the VCR first.");
+  }
   // ── Scrapple / cooking ───────────────────────────────────────────────────
   else if ((cmd === 'put' || cmd === 'add' || cmd === 'place' || cmd === 'slice' || cmd === 'cut') &&
            /scrapple/.test(rest) && /pan|stove|skillet/.test(rest))     { gamePutInPan([]); }
