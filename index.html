@@ -543,7 +543,10 @@ $3`,
     label:     'a ceramic mug',
     inCabinet: true,
     roomDesc:  'A ceramic mug is here.',
-    examDesc() { return mugFilled ? 'A ceramic mug. Still a little warm.' : 'A plain ceramic mug. Empty.'; },
+    examDesc() {
+      if (!mugFilled) return 'A plain ceramic mug. Empty.';
+      return mugHasHalf ? 'A ceramic mug. Coffee with half & half. Still warm.' : 'A ceramic mug. Still a little warm.';
+    },
   },
   {
     id:        'glass',
@@ -1077,6 +1080,7 @@ let tvOn         = false;   // tv state
 let recordPlaying = null;   // label of record currently on turntable
 let cabinetOpen   = false;   // kitchen cabinet state
 let mugFilled     = false;   // whether the mug has coffee in it
+let mugHasHalf    = false;   // whether half & half has been added
 let glassFilled   = false;   // whether the glass has water in it
 let seated        = false;   // player is seated
 let boomBoxOn     = false;   // boombox power state
@@ -1493,6 +1497,7 @@ function startAdventure() {
   recordPlaying = null;
   cabinetOpen     = false;
   mugFilled       = false;
+  mugHasHalf      = false;
   glassFilled     = false;
   seated          = false;
   boomBoxOn       = false;
@@ -2145,8 +2150,22 @@ function gameDrink(args) {
 }
 
 function _drinkCoffee() {
-  addLine('You take a sip. Lukewarm, a little bitter. Still hits the spot.');
-  mugFilled = false;
+  if (mugHasHalf) addLine('You take a sip. Lukewarm, a little sweet. Better with the half & half.');
+  else            addLine('You take a sip. Lukewarm, a little bitter. Still hits the spot.');
+  mugFilled  = false;
+  mugHasHalf = false;
+}
+
+function gameAddHalfAndHalf() {
+  if (!gInventory.includes('mug'))            { addLine("You don't have a mug."); return; }
+  if (!mugFilled)                             { addLine("Pour some coffee first."); return; }
+  if (mugHasHalf)                             { addLine("Already in there."); return; }
+  if (!gInventory.includes('half and half'))  { addLine("You're not holding the half & half."); return; }
+  mugHasHalf = true;
+  gInventory = gInventory.filter(id => id !== 'half and half');
+  const it = ITEMS.find(i => i.id === 'half and half');
+  if (it) it.dropped = true;
+  addLine('You tip in the last of it. The coffee goes pale.');
 }
 
 function _drinkWater() {
@@ -2476,7 +2495,7 @@ function gameSmell(args) {
     return;
   }
   if (/mug|cup/.test(target)) {
-    addLine(mugFilled ? 'Coffee. Slightly stale, but it works.' : 'Nothing. The mug is empty.');
+    addLine(!mugFilled ? 'Nothing. The mug is empty.' : mugHasHalf ? 'Coffee and cream. Warm.' : 'Coffee. Slightly stale, but it works.');
     return;
   }
   addLine('Nothing remarkable.');
@@ -2835,6 +2854,7 @@ function handleGameCommand(raw) {
   else if (cmd === 'stop'  && /vcr|vhs|movie|film|video/.test(rest))   { gameStop(args); }
   else if (cmd === 'watch' && /vcr|vhs|movie|film|video/.test(rest))   { gameWatch(args); }
   else if (cmd === 'lift'  && /needle/.test(rest))                      { gameStop(['needle']); }
+  else if (/^(pour|add|mix|put|splash)$/.test(cmd) && /half.*(half|&)|creamer|cream/.test(rest)) { gameAddHalfAndHalf(); }
   else if ((cmd === 'fill' || cmd === 'pour') && /mug|cup/.test(rest))       { gameFillMug(); }
   else if ((cmd === 'fill' || cmd === 'pour') && /glass|water/.test(rest))   { gameFillGlass(); }
   else if (cmd === 'get'   && /water/.test(rest))                            { gameFillGlass(); }
