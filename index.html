@@ -625,6 +625,11 @@ $3`,
   { id:'unlabeled 3',         label:'an unlabeled tape',         shelvedVHS:true, examDesc:"Plain black VHS shell. No label. The tape tab is broken off." },
   { id:'letterman',           label:'a tape labeled "David Letterman"', shelvedVHS:true, examDesc:'Plain black VHS shell. A strip of masking tape on the spine with "DAVID LETTERMAN" written in marker. Home recording off the TV.' },
 
+  // ── Dairy ────────────────────────────────────────────────────────────────
+  { id:'half and half', label:'a carton of half & half', inFridge:true,
+    examDesc:    "Land O' Lakes. You give it a shake. Nearly empty — maybe two pours left.",
+    examThought: "You should probably walk to Acme today. Or Theft Way, if you feel like the trip." },
+
   // ── Beer (inFridge: true — only accessible when fridge is open) ──────────
   { id:'yuengling',     label:'a Yuengling Lager',    inFridge:true, drinkable:true, examDesc:'Yuengling Traditional Lager. Pottsville, PA. Oldest brewery in America. Cold.' },
   { id:'dock street',   label:'a Dock Street Amber',  inFridge:true, drinkable:true, examDesc:"Dock Street Brewing Co. Local. Up on 18th Street. A good amber, a little malty." },
@@ -1874,6 +1879,7 @@ function gameExamine(args) {
   if (it.id === 'scrapple' && scrappleInPan && !gInventory.includes('scrapple')) { /* in pan — still examinable */ }
   lastItem = it.id;
   addLine(typeof it.examDesc === 'function' ? it.examDesc() : it.examDesc);
+  if (it.examThought) addLine(it.examThought, 'dim');
 }
 
 function gameInventory() {
