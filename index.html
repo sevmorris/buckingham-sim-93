@@ -1734,6 +1734,35 @@ function gameTake(args) {
     return;
   }
 
+  // Artist-name matching for records and tapes
+  {
+    const norm = (s) => s.toLowerCase().replace(/^the\s+/i, '').trim();
+    const nw   = norm(word);
+    if (nw.length >= 3) {
+      const byArtist = ITEMS.filter(it =>
+        it.artist &&
+        (it.shelved || it.shelvedTape) &&
+        !gInventory.includes(it.id) &&
+        norm(it.artist).includes(nw)
+      );
+      if (byArtist.length === 1) {
+        const found = byArtist[0];
+        autoStand();
+        gInventory.push(found.id);
+        lastItem = found.id;
+        addLine(found.shelvedTape ? `You take ${found.label} from the rack.` : `You take ${found.label} off the shelf.`);
+        if (found.takeNote) addLine(found.takeNote, 'dim');
+        return;
+      }
+      if (byArtist.length > 1) {
+        const kind = byArtist[0].shelvedTape ? 'tape' : 'record';
+        addLine(`Which ${kind}?`);
+        for (const r of byArtist) addLine(`  ${r.label}`);
+        return;
+      }
+    }
+  }
+
   const it = gameItem(word);
   if (!it || it.hidden)           { addLine("You don't see that here.");      return; }
   if (gInventory.includes(it.id)) { addLine("You're already carrying that."); return; }
