@@ -710,7 +710,7 @@ const LISTEN_DESC = {
   'pink flag':           "One of the short ones — 'Three Girl Rhumba' maybe, ninety seconds and done. Wire stripping everything down.",
   'automatic':           "'Nightswimming' or 'Everybody Hurts.' Hushed and melancholy. You didn't expect this from R.E.M. but here it is.",
   'document':            "'It's the End of the World as We Know It' and then 'The One I Love.' R.E.M. getting louder before they went huge.",
-  'gymnopedies':         "The first Gymnopédie. Slow and inevitable, like hearing something you already knew.",
+  'gymnopedies':         "Usually a bed time choice, but never a bad choice.",
   'tim':                 "'Here Comes a Regular' or 'Left of the Dial.' The Replacements almost mainstream and still completely themselves.",
   'zen arcade':          "'Chartered Trips' or somewhere deep in side three. Hüsker Dü playing fast and loud, then slow and sad.",
   'out of time':         "'Losing My Religion' or 'Half a World Away.' R.E.M. going acoustic. Shiny Happy People is on here too but you don't have to play it.",
@@ -909,7 +909,7 @@ const SCENERY = {
       stoveOn = true;
       if (scrappleInPan && !scrappleCooked) {
         addLine('You turn the knob. The burner ignites with a click and a soft whump.');
-        addLine('The scrapple starts to sizzle immediately. Sage and cornmeal and pork fat fill the kitchen.');
+        addLine('The aroma of sage and cornmeal and pork fat fills the kitchen as the scrapple starts to sizzle.');
       } else {
         addLine('You turn the knob. The burner ignites — a low blue flame.');
       }
@@ -1114,6 +1114,7 @@ let lastItem              = null;  // last item id mentioned — 'it'/'that' res
 let floppyUnlocked        = false; // floppy password has been accepted this session
 let floppyDecryptedContent = null; // decrypted letter text, cached after unlock
 let kitchenDrawerOpen = false; // kitchen drawer by the fridge
+let coffeeCanOpen     = false; // lid pried off the coffee can
 let stoveOn           = false; // stove burner is lit
 let scrappleInPan     = false; // scrapple has been sliced into the pan
 let scrappleCooked    = false; // scrapple is fully cooked and ready to eat
@@ -1763,10 +1764,13 @@ function gameTake(args) {
     }
   }
 
+  if (/^(scrapple|the scrapple|some scrapple)$/.test(word) && scrappleInPan) {
+    addLine("The scrapple is in the pan.");
+    return;
+  }
   const it = gameItem(word);
   if (!it || it.hidden)           { addLine("You don't see that here.");      return; }
   if (gInventory.includes(it.id)) { addLine("You're already carrying that."); return; }
-  if (it.id === 'scrapple' && scrappleInPan) { addLine("The scrapple is in the pan."); return; }
   if (it.inCabinet       && !cabinetOpen)       { addLine("The cabinet is closed."); return; }
   if (it.inFridge        && !fridgeOpen)         { addLine("The fridge is closed."); return; }
   if (it.inDrawer        && !drawerOpen)         { addLine("The drawer is closed."); return; }
@@ -2126,6 +2130,7 @@ function gameOpen(args) {
   if (!args.length) {
     if (lastItem) { gameOpen([lastItem]); return; }
     if (lastScenery) { gameOpen([lastScenery]); return; }
+    if (playerArea === 'kitchen') { gameOpen(['fridge']); return; }
     pendingVerb = 'open'; addLine('Open what?'); return;
   }
   autoStand();
@@ -2164,18 +2169,38 @@ function gameOpen(args) {
     return;
   }
   if (/^drawer/.test(word)) {
-    if (drawerOpen) { addLine('The drawer is already open.'); return; }
-    drawerOpen = true;
-    const fl = ITEMS.find(it => it.id === 'floppy');
-    addLine('You slide open the drawer.');
-    if (fl.inDrawer && !gInventory.includes('floppy') && !floppyInserted)
-      addLine('Inside: a 3.5" floppy disk labeled "Floppy Letter 2601".', 'dim');
-    else
-      addLine('The drawer is empty.', 'dim');
+    if (playerArea === 'kitchen') {
+      if (kitchenDrawerOpen) { addLine('The kitchen drawer is already open.'); return; }
+      kitchenDrawerOpen = true;
+      addLine('You slide open the kitchen drawer.');
+      const kn2 = ITEMS.find(it => it.id === 'knife');
+      if (kn2 && kn2.inKitchenDrawer && !gInventory.includes('knife'))
+        addLine('Inside: a paring knife, takeout menus, rubber bands, a box of matches.', 'dim');
+      else
+        addLine('Takeout menus, rubber bands, a box of matches.', 'dim');
+    } else {
+      if (drawerOpen) { addLine('The drawer is already open.'); return; }
+      drawerOpen = true;
+      const fl = ITEMS.find(it => it.id === 'floppy');
+      addLine('You slide open the drawer.');
+      if (fl.inDrawer && !gInventory.includes('floppy') && !floppyInserted)
+        addLine('Inside: a 3.5" floppy disk labeled "Floppy Letter 2601".', 'dim');
+      else
+        addLine('The drawer is empty.', 'dim');
+    }
     return;
   }
   if (/half.*(half|&)/.test(word)) { gameAddHalfAndHalf(); return; }
-  if (/coffee can|chase|sanborn|can of/.test(word)) { addLine("Pry off the lid and scoop the grounds into the filter."); return; }
+  if (/coffee can|chase|sanborn|can of/.test(word)) {
+    if (coffeeCanOpen) { addLine('The can is already open.'); return; }
+    const can = ITEMS.find(i => i.id === 'coffee can');
+    if (!gInventory.includes('coffee can') && !(can && can.onCounter)) {
+      addLine("You don't have the coffee can."); return;
+    }
+    coffeeCanOpen = true;
+    addLine('You pry off the plastic lid. The smell of ground coffee fills the kitchen.');
+    return;
+  }
   if (/filter box|box of filter|filters/.test(word)) { addLine("Pull one out and add it to the basket."); return; }
   if (/door/.test(word)) { addLine("You're not going anywhere right now."); return; }
   addLine("You can't open that.");
@@ -2379,6 +2404,10 @@ function gameAddGrounds() {
   const can = ITEMS.find(i => i.id === 'coffee can');
   if (!gInventory.includes('coffee can') && !(can && can.onCounter)) {
     addLine("You need the coffee can. It should be on the counter.");
+    return;
+  }
+  if (!coffeeCanOpen) {
+    addLine("The can is still sealed. Open it first.");
     return;
   }
   coffeePotState = 'grounds';
@@ -3444,7 +3473,19 @@ function handleGameCommand(raw) {
         addLine('You stare at the monitor. The monitor stares back.');
         break;
       case 'flip table': case 'flip':
-        addLine('You grab the edge of the desk, reconsider, and let go.');
+        if (scrappleInPan && stoveOn && !scrappleCooked) {
+          scrappleCooked = true;
+          addLine('The scrapple sizzles and crisps up. You flip the pieces with the knife.');
+          addLine('Edges go golden-brown. The kitchen smells like Saturday morning.');
+          addLine('');
+          addLine('Breakfast is ready.', 'dim');
+        } else if (scrappleInPan && !stoveOn) {
+          addLine("The stove isn't on. Nothing to flip yet.");
+        } else if (playerArea === 'kitchen') {
+          addLine("There's nothing here that needs flipping.");
+        } else {
+          addLine('You grab the edge of the desk, reconsider, and let go.');
+        }
         break;
       case 'panic':
         addLine('You take a breath. The rain helps.');
