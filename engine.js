@@ -1611,7 +1611,7 @@ function gameSmell(args) {
     if (GameState.farted) { parts.push('something rank — that was you'); GameState.farted = false; }
     if (GameState.scrappleInPan && GameState.stoveOn && !GameState.scrappleCooked) parts.push('sizzling scrapple — sage, cornmeal, pork fat. It fills the whole apartment');
     else if (GameState.scrappleCooked) parts.push('cooked scrapple going cold in the kitchen');
-    parts.push('rain coming through the window crack');
+    parts.push('smell of rain coming through the open window');
     parts.push('old paperbacks');
     if (GameState.mugFilled && GameState.gInventory.includes('mug')) parts.push('the coffee in your hand');
     else if (GameState.coffeePotState === 'fresh')   parts.push('fresh coffee from the kitchen');
