@@ -3601,6 +3601,7 @@ function handleGameCommand(raw) {
   else if (cmd === 'look'  && /^around/.test(rest))                     { gameLook(); }
   else if (cmd === 'look'  && /^(out|outside|through)/.test(rest))      { gameExamine(['window']); }
   else if (cmd === 'look'  && (args[0] === 'in' || args[0] === 'inside' || args[0] === 'into')) { gameExamine(args.slice(1)); }
+  else if (cmd === 'where' && /^am\b/.test(rest))                       { handleGameCommand('where'); }
   else if (cmd === 'pick'  && args[0] === 'up')                         { gameTake(args.slice(1)); }
   else if (cmd === 'put'   && args[0] === 'down')                       { gameDrop(args.slice(1)); }
   else if (cmd === 'put'   && /on (the )?turntable/.test(rest))         { gamePlay(rest.replace(/\s*on (the )?turntable/, '').trim().split(' ')); }
@@ -3833,6 +3834,17 @@ function handleGameCommand(raw) {
       case 'wave':                                      addLine('You wave at nobody in particular.'); break;
       case 'score':                                     addLine('There is no score. Just the room.'); break;
       case 'map':                                       gameMap(); break;
+      case 'where': {
+        const _w = playerArea;
+        if      (!_w)                                       addLine('You\'re standing in the middle of the living room.');
+        else if (_w === 'desk' || _w === 'chair')           addLine('You\'re at the desk.');
+        else if (_w === 'sofa')                             addLine(seated ? 'You\'re sitting on the sofa.' : 'You\'re near the sofa.');
+        else if (_w === 'kitchen')                          addLine('You\'re in the kitchen.');
+        else if (_w === 'shelf')                            addLine('You\'re at the record shelf.');
+        else if (_w === 'north')                            addLine('You\'re at the north shelves.');
+        else if (_w === 'ne')                               addLine('You\'re in the northeast corner, near the boombox and cassettes.');
+        break;
+      }
       case 'about': case 'credits': case 'info':        addLine('West Philly Simulator 93. A small apartment, October 1993. Made for one person. Everyone else is welcome to look around.'); break;
       case 'xyzzy': case 'plugh':                       addLine('Nothing happens.'); break;
 
