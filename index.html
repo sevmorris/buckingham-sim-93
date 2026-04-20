@@ -445,7 +445,15 @@ Type  buckingham  to play.
      content   : text shown when they  read  it (optional)
 */
 const ROOM_DESC =
-`A small living room. A boxy television sits against the west wall, a VCR stacked underneath. An old sofa sits in the middle of the room, facing it — a cat curled up on one end. Records and a turntable line the south wall. Along the north wall: bookshelves at the northwest end, then a VHS shelf, then a metal desk with a PC and printer — and in the northeast corner a battered boombox and a rack of cassettes near the door to the back bedroom. In the northwest corner, a small table holds a phone and an answering machine. The kitchen is open to the east. Rain against the window.`;
+`A small living room. A boxy television sits against the west wall, a VCR stacked underneath. An old sofa sits in the middle of the room, facing it — a cat curled up on one end.
+
+Records and a turntable line the south wall.
+
+Along the north wall: bookshelves at the northwest end, then a VHS shelf, then a metal desk with a PC and printer — and in the northeast corner a battered boombox and a rack of cassettes near the door to the back bedroom.
+
+In the northwest corner, a small table holds a phone and an answering machine.
+
+The kitchen is open to the east. The sound of rain through the open window.`;
 
 const ITEMS = [
 
@@ -622,7 +630,7 @@ $3`,
     examDesc() {
       if (scrappleCooked) return 'Scrapple cooked golden-brown in the pan. Crispy at the edges, still steaming. Eat it before it gets cold.';
       if (scrappleInPan)  return "Scrapple sliced into the pan, ready to go. Turn on the stove.";
-      return "Scrapple. A dense gray-brown block wrapped in waxed paper. Smells faintly of sage, cornmeal, and pork. Philadelphia staple.";
+      return "Scrapple. A dense gray-brown block wrapped in plastic. Smells faintly of sage, cornmeal, and pork. Philadelphia staple.";
     },
   },
 
@@ -740,7 +748,7 @@ const READ_DESC = {
 const SCENERY = {
   chair: {
     names: ['chair', 'desk chair', 'office chair'],
-    desc: 'A beat-up rolling chair pushed under the desk. The kind that leans back too far if you let it.',
+    desc: 'A metal folding chair pushed under the desk.',
   },
   desk: {
     names: ['desk', 'metal desk'],
@@ -837,8 +845,8 @@ const SCENERY = {
   cat: {
     names: ['cat', 'cracker', 'kitten', 'kitty'],
     desc() {
-      if (seated) return 'Cracker — beige, medium-length hair, deeply asleep. She\'s pressed against your leg, slow-breathing. One paw is tucked under her chin.';
-      return 'Cracker is curled up on the sofa, fast asleep. Beige, medium-length hair. She doesn\'t stir.';
+      if (seated) return 'Cracker (aka Crack Baby) — beige, medium-length hair, deeply asleep. She\'s pressed against your leg, slow-breathing. One paw is tucked under her chin.';
+      return 'Cracker is curled up on the sofa, fast asleep. She doesn\'t stir.';
     },
   },
   cabinet: {
@@ -848,7 +856,7 @@ const SCENERY = {
       const hasMug   = !gInventory.includes('mug');
       const hasGlass = !gInventory.includes('glass');
       if (!hasMug && !hasGlass) return 'The cabinet is open. You\'ve taken what you need — a few more mugs and glasses still on the shelf.';
-      if (hasMug && hasGlass)   return 'The cabinet is open. A few ceramic mugs and drinking glasses on the shelf.';
+      if (hasMug && hasGlass)   return 'The cabinet is open. A few ceramic mugs from Second Mile, and some drinking glasses on the shelf.';
       if (hasMug)               return 'The cabinet is open. A few ceramic mugs on the shelf. The glasses are there too.';
       return 'The cabinet is open. A few drinking glasses on the shelf. The mugs are there too.';
     },
@@ -959,7 +967,7 @@ const SCENERY = {
   },
   window: {
     names: ['window', 'windows', 'outside'],
-    desc: 'A small window in the southeast corner of the kitchen, cracked open an inch or two. Rain on the glass. Warm, damp air drifts in through the gap.',
+    desc: 'A small window in the southeast corner of the kitchen, cracked open an inch or two. Warm, damp air drifts in through the gap.',
   },
   quilt: {
     names: ['quilt', 'blanket', 'throw', 'patchwork'],
@@ -978,7 +986,7 @@ const SCENERY = {
     desc() {
       const available = ITEMS.filter(it => it.shelvedBook && !gInventory.includes(it.id) && !it.dropped);
       const titles = available.map(it => it.label).join(', ');
-      return `A wooden bookshelf at the northwest end of the north wall. Titles: ${titles}. The VHS shelf sits right beside it.`;
+      return `A metal bookshelf at the northwest end of the north wall. Titles: ${titles}. The VHS shelf sits right beside it.`;
     },
   },
   cassetteShelf: {
@@ -992,9 +1000,9 @@ const SCENERY = {
   boombox: {
     names: ['boombox', 'boom box', 'boom-box', 'stereo', 'tape player', 'cassette player', 'tape deck'],
     desc() {
-      if (!boomBoxOn) return 'A battered boombox in the northeast corner, on a shelf beside the cassettes. Power light off.';
+      if (!boomBoxOn) return 'A Sony boombox in the northeast corner, on a shelf beside the cassettes. Power light off.';
       if (cassettePlaying) return `The boombox is on. ${cassettePlaying} is playing.`;
-      return "The boombox is on. Nothing in the deck — just a hiss of static.";
+      return "The boombox is on. Nothing in the deck.";
     },
     toggle: true,
     turnOn()  { boomBoxOn = true;  addLine('You click the boombox on. It hisses to life.'); if (cassettePlaying) addLine('The tape starts rolling.', 'dim'); },
@@ -1016,7 +1024,7 @@ const SCENERY = {
     names: ['vcr', 'vhs player', 'video player', 'video recorder', 'vcr player'],
     desc() {
       if (!vcrOn && vhsPlayingId) return `A VCR stacked under the television. Power light off. ${cap(vhsPlaying)} is loaded.`;
-      if (!vcrOn) return 'A VCR stacked under the television. Power light off.';
+      if (!vcrOn) return 'A VCR under the television. Power light off. The clock blinks 12:00.';
       if (vhsPlaying) return `The VCR is on. ${cap(vhsPlaying)} is loaded and playing.`;
       return 'The VCR is on. No tape loaded.';
     },
@@ -1061,12 +1069,12 @@ const SCENERY = {
     desc() {
       return messageHeard
         ? 'The answering machine. Red light is off — no new messages.'
-        : 'The answering machine. The red light is blinking. One message.';
+        : 'The answering machine. The red light is blinking. A message awaits.';
     },
   },
   bedroomDoor: {
     names: ['back bedroom', 'bedroom', 'bedroom door', 'back bedroom door', 'back door'],
-    desc: 'A door in the northeast corner leading to the back bedroom. Closed.',
+    desc: 'A door in the northeast corner leading to the back bedroom.',
   },
 };
 
@@ -2508,7 +2516,7 @@ function gameOpen(args) {
     addLine('You open the cabinet.');
     const hasMug   = !gInventory.includes('mug');
     const hasGlass = !gInventory.includes('glass');
-    if (hasMug && hasGlass) addLine('A few ceramic mugs and drinking glasses on the shelf.', 'dim');
+    if (hasMug && hasGlass) addLine('A few ceramic mugs from Second Mile, and some drinking glasses on the shelf.', 'dim');
     else if (hasMug)        addLine('The mugs and glasses are on the shelf.', 'dim');
     else if (hasGlass)      addLine('The glasses are still on the shelf.', 'dim');
     else                    addLine('The mugs and glasses are still on the shelf.', 'dim');
@@ -2847,8 +2855,8 @@ function gameDrink(args) {
 }
 
 function _drinkCoffee() {
-  if (mugHasFreshCoffee && mugHasHalf) addLine('You take a sip. Hot and smooth. Good call on the half & half.');
-  else if (mugHasFreshCoffee)          addLine('You take a sip. Hot and sharp. Good.');
+  if (mugHasFreshCoffee && mugHasHalf) addLine('You take a sip. Hot and smooth.');
+  else if (mugHasFreshCoffee)          addLine('You take a sip. Hot and sharp, a little bitter. Good.');
   else if (mugHasHalf)                 addLine('You take a sip. Lukewarm, a little sweet. Better with the half & half.');
   else                                 addLine('You take a sip. Lukewarm, a little bitter. Still hits the spot.');
   mugFilled = false; mugHasHalf = false; mugHasFreshCoffee = false;
@@ -2910,7 +2918,7 @@ function gameSit(args) {
   playerArea = where;
 
   if (where === 'chair') {
-    addLine('You drop into the desk chair and roll up to the monitor.');
+    addLine('You drop into the desk chair and scoot up to the monitor.');
   } else {
     if (vhsPlaying && tvOn) addLine(`You sink into the sofa. Cracker shifts and presses against your leg. ${cap(vhsPlaying)} is on.`);
     else if (tvOn)          addLine("You sink into the sofa. Cracker shifts and presses against your leg. You watch Hogan's Heroes.");
@@ -3078,9 +3086,9 @@ function gameListen(args) {
       else { addLine(`The VCR hums. ${cap(vhsPlaying)} is on.`); const wd = WATCH_DESC[vhsPlayingId]; if (wd) addLine(wd, 'dim'); }
     } else if (tvOn) {
       addLine("The laugh track from Hogan's Heroes drifts over from the TV.");
-      addLine("Rain against the kitchen window underneath it.", 'dim');
+      addLine("Rain through the open kitchen window underneath it.", 'dim');
     } else {
-      addLine("Rain against the kitchen window. The refrigerator hums.");
+      addLine("Rain through the open kitchen window. The refrigerator hums.");
     }
     return;
   }
@@ -3120,7 +3128,7 @@ function gameListen(args) {
     return;
   }
   if (/outside|street|window|traffic/.test(target)) {
-    addLine("Rain against the kitchen window. Steady. Warm air coming through the crack.");
+    addLine("Rain through the open kitchen window. Steady. Warm air coming through the crack.");
     return;
   }
   if (/fridge|refrigerator/.test(target)) {
@@ -3864,7 +3872,7 @@ function handleGameCommand(raw) {
         addLine('You give her a scratch behind the ear. She doesn\'t wake up but purrs louder.');
         break;
       case 'sudo':
-        addLine('This is not a computer. Well — it is, but not that kind.');
+        addLine('This is not that kind of computer.');
         break;
       case 'hack':
         addLine('You stare at the monitor. The monitor stares back.');
