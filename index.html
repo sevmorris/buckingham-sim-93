@@ -748,8 +748,8 @@ const SCENERY = {
       const onDesk = ITEMS.filter(it => it.onDesk && !gInventory.includes(it.id));
       const listed = onDesk.map(it => it.label).join(', ');
       const surface = listed
-        ? `A metal desk along the north wall. On it: a PC, a dot-matrix printer, and ${listed}.`
-        : 'A metal desk along the north wall. A PC and a dot-matrix printer sit on it.';
+        ? `A metal desk along the north wall. On it: a beige PC, a dot-matrix printer, and ${listed}.`
+        : 'A metal desk along the north wall. A beige PC and a dot-matrix printer sit on it.';
       return `${surface} A shallow drawer below the surface.`;
     },
   },
