@@ -2280,7 +2280,41 @@ const VERB_REGISTRY = [
     SystemState.state = 'shell';
     showPrompt();
     return 'QUIT';
-  } }
+  } },
+
+  // ── Additional nonsense & classic IF commands ────────────────────────
+  { test: (cmd) => ['jump', 'leap'].includes(cmd), exec: (cmd, args, rest) => { addLine('You jump on the spot. The floorboards creak.'); } },
+  { test: (cmd) => ['pray', 'pray'].includes(cmd), exec: (cmd, args, rest) => { addLine('If there is a god of this apartment, they are not listening.'); } },
+  { test: (cmd) => ['cry', 'weep', 'sob'].includes(cmd), exec: (cmd, args, rest) => { addLine('You shed a single tear for the state of your life. Then you move on.'); } },
+  { test: (cmd) => ['laugh', 'chuckle', 'giggle'].includes(cmd), exec: (cmd, args, rest) => { addLine('You laugh out loud. It sounds a little unhinged in the empty room.'); } },
+  { test: (cmd) => ['scream', 'shout', 'yell'].includes(cmd), exec: (cmd, args, rest) => { addLine('You scream into the void. The void asks you to keep it down.'); } },
+  { test: (cmd) => ['hello', 'hi', 'greetings'].includes(cmd), exec: (cmd, args, rest) => { addLine('Hello. The apartment remains otherwise silent.'); } },
+  { test: (cmd) => ['swim'].includes(cmd), exec: (cmd, args, rest) => { addLine('There is no water deep enough here, thankfully.'); } },
+  { test: (cmd) => ['fly'].includes(cmd), exec: (cmd, args, rest) => { addLine('You are not a bird.'); } },
+  { test: (cmd) => ['dig'].includes(cmd), exec: (cmd, args, rest) => { addLine('The landlord would not appreciate you digging up the hardwood floor.'); } },
+  { test: (cmd) => ['kiss'].includes(cmd), exec: (cmd, args, rest) => { addLine('You pucker up, but find nothing worthy of a kiss.'); } },
+  { test: (cmd) => ['lick', 'taste'].includes(cmd), exec: (cmd, args, rest) => { addLine('Please don\'t put your tongue on things in here.'); } },
+  { test: (cmd) => ['punch', 'hit', 'kick', 'strike', 'attack', 'break', 'smash', 'destroy'].includes(cmd), exec: (cmd, args, rest) => { addLine('Violence is not the answer.'); } },
+  { test: (cmd) => ['burn'].includes(cmd), exec: (cmd, args, rest) => { addLine('You don\'t have a lighter, and arson is a crime.'); } },
+  { test: (cmd) => ['smoke'].includes(cmd), exec: (cmd, args, rest) => { addLine('You quit years ago.'); } },
+  { test: (cmd) => ['magic', 'cast', 'spell', 'abracadabra'].includes(cmd), exec: (cmd, args, rest) => { addLine('You wave your hands mysteriously. Nothing happens.'); } },
+  { test: (cmd) => ['inventory', 'i', 'inv', 'items', 'carrying'].includes(cmd), exec: (cmd, args, rest) => { gameInventory(); } },
+  { test: (cmd) => ['wait', 'z'].includes(cmd), exec: (cmd, args, rest) => {
+    addLine('Time passes.');
+    if (GameState.coffeePotState === 'brewing') checkBrew();
+  } },
+  { test: (cmd) => ['turn'].includes(cmd), exec: (cmd, args, rest) => { addLine('Turn what on or off?'); } },
+  { test: (cmd) => ['push', 'shove'].includes(cmd), exec: (cmd, args, rest) => { addLine("That doesn't budge."); } },
+  { test: (cmd) => ['pull'].includes(cmd), exec: (cmd, args, rest) => { addLine('You give it a tug. Nothing moves.'); } },
+  { test: (cmd) => ['sleep', 'nap'].includes(cmd), exec: (cmd, args, rest) => { addLine("You're not tired enough for that."); } },
+  { test: (cmd) => ['think'].includes(cmd), exec: (cmd, args, rest) => { addLine('Your mind wanders.'); } },
+  { test: (cmd) => ['dance'].includes(cmd), exec: (cmd, args, rest) => { addLine('You shuffle in place for a moment.'); } },
+  { test: (cmd) => ['sing'].includes(cmd), exec: (cmd, args, rest) => {
+    addLine(GameState.recordPlaying ? `You hum along with ${GameState.recordPlaying}.` : 'You hum to yourself.');
+  } },
+  { test: (cmd) => ['wave'].includes(cmd), exec: (cmd, args, rest) => { addLine('You wave at nobody in particular.'); } },
+  { test: (cmd) => ['score'].includes(cmd), exec: (cmd, args, rest) => { addLine('There is no score. Just the room.'); } },
+  { test: (cmd) => ['map'].includes(cmd), exec: (cmd, args, rest) => { gameMap(); } }
 ];
 
 function handleGameCommand(raw) {
