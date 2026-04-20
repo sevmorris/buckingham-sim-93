@@ -143,7 +143,7 @@
 
     #crt-screen {
       position: relative; z-index: 2;
-      max-width: 660px; width: 92%;
+      max-width: 860px; width: 92%;
       max-height: 90vh;
       overflow-y: auto;
       padding: 3rem 3.5rem;
@@ -478,7 +478,7 @@ BILLBOARD 200 (ALBUMS)
     id:       'tmz flyer',
     label:    'a flyer from the printer',
     onDesk:   true,
-    examDesc: 'A fresh printout, still slightly warm. Touch Me Zoo at the Khyber Pass.',
+    examDesc: 'A fresh printout, still slightly warm. Touch Me Zoo at the Khyber Pass. Friday the 8th.',
     content:
 `TOUCH ME ZOO
 The Khyber Pass  --  56 S. 2nd St., Philadelphia
@@ -1127,6 +1127,373 @@ let vcrOn         = false;   // VCR power state
 let vhsPlaying    = null;    // label of VHS currently playing (for display)
 let vhsPlayingId  = null;    // id of VHS currently playing (for item identity)
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Context Awareness Layer
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// ContextManager  —  ActionHistory + FocusStack + pronoun resolution,
+//   contextual disambiguation, and auto-navigation.
+//
+//   Design: additive layer over the existing engine. Existing globals
+//   (lastItem, lastScenery, playerArea …) remain authoritative and are
+//   kept in sync by setFocus(). All existing verb functions work unchanged.
+//
+// GameState  —  single observable facade over the global flag variables.
+//   Existing code reads/writes globals directly; new code may use GameState.*
+//   for a clean, named entry-point without a mass-rename of 200+ references.
+// ─────────────────────────────────────────────────────────────────────────
+
+const ContextManager = (() => {
+
+  // ── ActionHistory ─────────────────────────────────────────────────────────
+  // Stores the last N structured intents so disambiguation can consult
+  // several turns of behaviour rather than just the single previous command.
+  // Entry shape: { verb, object, area, ts }
+  const HISTORY_MAX   = 10;
+  const actionHistory = [];
+
+  function pushHistory(intent) {
+    actionHistory.push({ ...intent, ts: Date.now() });
+    if (actionHistory.length > HISTORY_MAX) actionHistory.shift();
+  }
+
+  // ── FocusStack ────────────────────────────────────────────────────────────
+  // Ordered list of recently-focused entities (most recent first).
+  // Entry shape: { id, type ('item'|'scenery'), children: [id,…], ts }
+  //
+  // 'children' captures co-visible items when a container/scenery is examined.
+  // e.g. examining the desk pushes { id:'desk', children:['billboard','floppy',…] }
+  // so "take it" can resolve to the most contextually appropriate child rather
+  // than whatever happened to be mentioned in the previous sentence.
+  const FOCUS_MAX  = 8;
+  const focusStack = [];
+
+  function setFocus(id, type = 'item', children = []) {
+    const idx = focusStack.findIndex(f => f.id === id);
+    if (idx !== -1) focusStack.splice(idx, 1);
+    focusStack.unshift({ id, type, children, ts: Date.now() });
+    if (focusStack.length > FOCUS_MAX) focusStack.pop();
+    // Keep legacy globals in sync — all existing verb functions keep working
+    if (type === 'item')    lastItem    = id;
+    if (type === 'scenery') lastScenery = id;
+  }
+
+  // ── Area membership tables ────────────────────────────────────────────────
+  const AREA_ITEMS = {
+    desk:    ['billboard', 'tmz flyer', 'pens', 'pen', 'floppy'],
+    kitchen: ['mug', 'glass', 'scrapple', 'knife', 'coffee can',
+              'filter box', 'filter', 'half and half'],
+  };
+  const AREA_SCENERY = {
+    desk:    ['desk', 'drawer', 'pc', 'computer', 'monitor', 'printer'],
+    kitchen: ['fridge', 'refrigerator', 'stove', 'counter', 'cabinet',
+              'sink', 'coffee maker', 'coffee pot', 'kitchen drawer'],
+    shelf:   ['record shelf', 'shelf', 'turntable'],
+    ne:      ['boombox', 'cassette shelf', 'cassette rack'],
+    north:   ['bookshelf', 'bookshelves', 'vhs shelf', 'phone',
+              'answering machine', 'small table'],
+    sofa:    ['sofa', 'couch'],
+  };
+
+  function areaOf(id) {
+    for (const [area, ids] of Object.entries(AREA_ITEMS))
+      if (ids.includes(id)) return area;
+    for (const [area, names] of Object.entries(AREA_SCENERY))
+      if (names.some(n => id === n || id.startsWith(n.split(' ')[0]))) return area;
+    return null;
+  }
+
+  // Maps an item id to its home area using ITEMS container properties
+  // (more accurate than the static table for dynamic item placement).
+  function homeAreaOf(id) {
+    if (gInventory.includes(id)) return null;  // in hand — no fixed home
+    const it = ITEMS.find(i => i.id === id);
+    if (it) {
+      if (it.onDesk  || it.inDrawer)                                return 'desk';
+      if (it.inCabinet || it.onCounter ||
+          it.inFridge  || it.inKitchenDrawer)                       return 'kitchen';
+      if (it.shelved)                                               return 'shelf';
+      if (it.shelvedTape)                                           return 'ne';
+      if (it.shelvedBook || it.shelvedVHS)                          return 'north';
+    }
+    return areaOf(id);
+  }
+
+  // ── Verb → semantic fitness checks ────────────────────────────────────────
+  // Given an id and a verb, returns true if the id is a plausible target.
+  // Used by resolveIt() to prefer a contextually sensible resolution over
+  // whatever happened to be the last regex match.
+  const VERB_CHECKS = {
+    open:       id => /drawer|fridge|refrigerator|cabinet|box|door/.test(id),
+    close:      id => /drawer|fridge|refrigerator|cabinet|box|door/.test(id),
+    read:       id => /floppy|disk|billboard|flyer|book|note|letter|magazine|poster/.test(id),
+    play:       id => ITEMS.some(i => (i.shelved || i.shelvedTape || i.shelvedVHS) && i.id === id),
+    take:       id => ITEMS.some(i => i.id === id && !i.hidden),
+    get:        id => ITEMS.some(i => i.id === id && !i.hidden),
+    grab:       id => ITEMS.some(i => i.id === id && !i.hidden),
+    drop:       id => gInventory.includes(id),
+    examine:    _  => true,
+    x:          _  => true,
+    drink:      id => /beer|lager|coffee|mug|glass|water|cup/.test(id),
+    eat:        id => /scrapple|food/.test(id),
+    cook:       id => /scrapple/.test(id),
+    insert:     id => /floppy|disk|cassette|tape|vhs/.test(id),
+    eject:      id => /floppy|disk|cassette|tape|vhs/.test(id),
+    'turn on':  id => /tv|lamp|stove|vcr|boombox|light/.test(id),
+    'turn off': id => /tv|lamp|stove|vcr|boombox|light/.test(id),
+  };
+
+  // ── Pronoun resolution via FocusStack ─────────────────────────────────────
+  // Walks the stack from the top, returning the first entry where the verb
+  // semantically fits. Falls back to the raw top of the stack if nothing
+  // passes the fitness check, and finally to the legacy lastItem/lastScenery.
+  function resolveIt(verb) {
+    const check = VERB_CHECKS[verb];
+    for (const entry of focusStack) {
+      if (!check || check(entry.id)) return entry.id;
+      // Scan children of a focused scenery (e.g. desk exposes billboard, floppy …)
+      for (const child of (entry.children || [])) {
+        if (!check || check(child)) return child;
+      }
+    }
+    return null;
+  }
+
+  function resolvePronouns(str, verb = '') {
+    if (!/\b(it|that|this|one|them)\b/.test(str)) return str;
+    const resolved = resolveIt(verb) || lastItem || lastScenery;
+    if (!resolved) return str;
+    return str.replace(/\b(it|that|this|one|them)\b/g, resolved);
+  }
+
+  // ── Disambiguation ────────────────────────────────────────────────────────
+  // Scores each candidate by recency in ActionHistory, position in FocusStack,
+  // area proximity, and verb fitness. Returns the winner if one is clearly
+  // ahead; returns null if candidates are tied (caller should ask).
+  function disambiguate(verb, candidates) {
+    if (!candidates.length) return null;
+    if (candidates.length === 1) return candidates[0];
+
+    const check = VERB_CHECKS[verb];
+    const scored = candidates.map(id => {
+      let score = 0;
+      actionHistory.slice().reverse().forEach((h, i) => {
+        if (h.object && h.object.includes(id)) score += HISTORY_MAX - i;
+      });
+      focusStack.forEach((f, i) => {
+        if (f.id === id)                             score += (FOCUS_MAX - i) * 2;
+        if (f.children && f.children.includes(id))   score +=  FOCUS_MAX - i;
+      });
+      const home = areaOf(id);
+      if (home && home === playerArea)               score += 5;
+      if (check && check(id))                        score += 3;
+      return { id, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    if (scored[0].score > 0 && scored[0].score > scored[1].score) return scored[0].id;
+    return null;
+  }
+
+  // ── Auto-navigation ───────────────────────────────────────────────────────
+  // Moves the player to targetArea with a brief narrative transition.
+  // Calls autoStand() if seated. Returns true if a move occurred.
+  function autoNavigate(targetArea, msg) {
+    if (playerArea === targetArea) return false;
+    autoStand();
+    playerArea = targetArea;
+    const defaults = {
+      desk:    'You walk back over to the desk.',
+      kitchen: 'You step back into the kitchen.',
+      shelf:   'You walk to the record shelf.',
+      ne:      'You walk to the northeast corner.',
+      north:   'You walk over to the north shelves.',
+      sofa:    'You drift back toward the sofa.',
+    };
+    addLine(msg || defaults[targetArea] || 'You move over.');
+    return true;
+  }
+
+  // canInteract: checks reachability of id from the current playerArea.
+  // If autoMove is true (default), navigates there transparently and returns true.
+  // Items in gInventory are always reachable regardless of area.
+  function canInteract(id, autoMove = true) {
+    if (!id) return true;
+    if (gInventory.includes(id)) return true;
+    const home = homeAreaOf(id);
+    if (!home || home === playerArea) return true;
+    if (autoMove) { autoNavigate(home); return true; }
+    return false;
+  }
+
+  return {
+    push:           pushHistory,
+    get history()   { return actionHistory; },
+    setFocus,
+    get focus()     { return focusStack; },
+    resolveIt,
+    resolvePronouns,
+    disambiguate,
+    autoNavigate,
+    canInteract,
+    homeAreaOf,
+    areaOf,
+  };
+})();
+
+// ── GameState facade ───────────────────────────────────────────────────────
+// Single named interface over the engine's global flags. Existing code reads
+// and writes globals directly — this object provides a clean API for new code
+// without a mass-rename of the ~200 existing references throughout the file.
+const GameState = {
+  get lampOn()            { return lampOn; },            set lampOn(v)            { lampOn = v; },
+  get tvOn()              { return tvOn; },              set tvOn(v)              { tvOn = v; },
+  get recordPlaying()     { return recordPlaying; },     set recordPlaying(v)     { recordPlaying = v; },
+  get mugFilled()         { return mugFilled; },         set mugFilled(v)         { mugFilled = v; },
+  get mugHasHalf()        { return mugHasHalf; },        set mugHasHalf(v)        { mugHasHalf = v; },
+  get coffeePotState()    { return coffeePotState; },    set coffeePotState(v)    { coffeePotState = v; },
+  get seated()            { return seated; },            set seated(v)            { seated = v; },
+  get fridgeOpen()        { return fridgeOpen; },        set fridgeOpen(v)        { fridgeOpen = v; },
+  get drawerOpen()        { return drawerOpen; },        set drawerOpen(v)        { drawerOpen = v; },
+  get cabinetOpen()       { return cabinetOpen; },       set cabinetOpen(v)       { cabinetOpen = v; },
+  get kitchenDrawerOpen() { return kitchenDrawerOpen; }, set kitchenDrawerOpen(v) { kitchenDrawerOpen = v; },
+  get stoveOn()           { return stoveOn; },           set stoveOn(v)           { stoveOn = v; },
+  get scrappleInPan()     { return scrappleInPan; },     set scrappleInPan(v)     { scrappleInPan = v; },
+  get scrappleCooked()    { return scrappleCooked; },    set scrappleCooked(v)    { scrappleCooked = v; },
+  get playerArea()        { return playerArea; },        set playerArea(v)        { playerArea = v; },
+  get floppyInserted()    { return floppyInserted; },    set floppyInserted(v)    { floppyInserted = v; },
+  get floppyRead()        { return floppyRead; },        set floppyRead(v)        { floppyRead = v; },
+  get cassettePlaying()   { return cassettePlaying; },   set cassettePlaying(v)   { cassettePlaying = v; },
+  get vhsPlaying()        { return vhsPlaying; },        set vhsPlaying(v)        { vhsPlaying = v; },
+  get vhsPlayingId()      { return vhsPlayingId; },      set vhsPlayingId(v)      { vhsPlayingId = v; },
+  get boomBoxOn()         { return boomBoxOn; },         set boomBoxOn(v)         { boomBoxOn = v; },
+  get vcrOn()             { return vcrOn; },             set vcrOn(v)             { vcrOn = v; },
+  get messageHeard()      { return messageHeard; },      set messageHeard(v)      { messageHeard = v; },
+  get lastItem()               { return lastItem; },               set lastItem(v)               { lastItem = v; },
+  get lastScenery()            { return lastScenery; },            set lastScenery(v)            { lastScenery = v; },
+  get pendingVerb()            { return pendingVerb; },            set pendingVerb(v)            { pendingVerb = v; },
+  get mugHasFreshCoffee()      { return mugHasFreshCoffee; },      set mugHasFreshCoffee(v)      { mugHasFreshCoffee = v; },
+  get glassFilled()            { return glassFilled; },            set glassFilled(v)            { glassFilled = v; },
+  get farted()                 { return farted; },                 set farted(v)                 { farted = v; },
+  get ejectNudged()            { return ejectNudged; },            set ejectNudged(v)            { ejectNudged = v; },
+  get brewChecked()            { return brewChecked; },            set brewChecked(v)            { brewChecked = v; },
+  get coffeeCanOpen()          { return coffeeCanOpen; },          set coffeeCanOpen(v)          { coffeeCanOpen = v; },
+  get awaitingFloppyPass()     { return awaitingFloppyPass; },     set awaitingFloppyPass(v)     { awaitingFloppyPass = v; },
+  get awaitingSitTarget()      { return awaitingSitTarget; },      set awaitingSitTarget(v)      { awaitingSitTarget = v; },
+  get floppyUnlocked()         { return floppyUnlocked; },         set floppyUnlocked(v)         { floppyUnlocked = v; },
+  get floppyDecryptedContent() { return floppyDecryptedContent; }, set floppyDecryptedContent(v) { floppyDecryptedContent = v; },
+  get gInventory()             { return gInventory; },
+  get focus()                  { return ContextManager.focus; },
+  get history()                { return ContextManager.history; },
+
+  // Reset all mutable game flags to their start-of-game values.
+  // Called by startAdventure() — single source of truth for initial state.
+  reset() {
+    gInventory          = [];
+    gHistory            = [];
+    gHistIdx            = -1;
+    lampOn              = true;
+    tvOn                = false;
+    recordPlaying       = null;
+    cabinetOpen         = false;
+    mugFilled           = false;
+    mugHasHalf          = false;
+    mugHasFreshCoffee   = false;
+    glassFilled         = false;
+    farted              = false;
+    seated              = false;
+    boomBoxOn           = false;
+    cassettePlaying     = null;
+    fridgeOpen          = false;
+    drawerOpen          = false;
+    floppyInserted      = false;
+    messageHeard        = false;
+    floppyRead          = false;
+    ejectNudged         = false;
+    vcrOn               = false;
+    vhsPlaying          = null;
+    vhsPlayingId        = null;
+    floppyDecryptedContent = null;
+    awaitingFloppyPass  = false;
+    awaitingSitTarget   = false;
+    pendingVerb         = null;
+    lastItem            = null;
+    lastScenery         = null;
+    floppyUnlocked      = false;
+    kitchenDrawerOpen   = false;
+    coffeeCanOpen       = false;
+    stoveOn             = false;
+    scrappleInPan       = false;
+    scrappleCooked      = false;
+    coffeePotState      = 'old';
+    brewChecked         = false;
+    playerArea          = null;
+    // Reset item state from their cached originals
+    for (const it of ITEMS) {
+      it.hidden          = it._origHidden;
+      it.inCabinet       = it._origInCabinet;
+      it.inFridge        = it._origInFridge;
+      it.inDrawer        = it._origInDrawer;
+      it.inKitchenDrawer = it._origInKitchenDrawer;
+      it.onCounter       = it._origOnCounter;
+      it.label           = it._origLabel;
+      it.examDesc        = it._origExamDesc;
+      it.examThought     = it._origExamThought;
+      it.takeNote        = it._origTakeNote;
+      it._used           = false;
+      it.dropped         = false;
+    }
+    // Clear context history so a new session starts fresh
+    ContextManager.focus.length   = 0;
+    ContextManager.history.length = 0;
+  },
+
+  // Serialize all mutable flags to a plain object for save/restore.
+  serialize() {
+    return {
+      gInventory, lampOn, tvOn, recordPlaying, cabinetOpen,
+      mugFilled, mugHasHalf, mugHasFreshCoffee, glassFilled, farted,
+      seated, boomBoxOn, cassettePlaying, fridgeOpen, drawerOpen,
+      floppyInserted, messageHeard, floppyRead, ejectNudged,
+      vcrOn, vhsPlaying, vhsPlayingId, floppyDecryptedContent,
+      awaitingFloppyPass, awaitingSitTarget, pendingVerb,
+      lastItem, lastScenery, floppyUnlocked, kitchenDrawerOpen,
+      coffeeCanOpen, stoveOn, scrappleInPan, scrappleCooked,
+      coffeePotState, brewChecked, playerArea,
+      items: ITEMS.map(it => ({
+        id: it.id, hidden: it.hidden, inCabinet: it.inCabinet,
+        inFridge: it.inFridge, inDrawer: it.inDrawer,
+        inKitchenDrawer: it.inKitchenDrawer, onCounter: it.onCounter,
+        dropped: it.dropped, _used: it._used,
+      })),
+    };
+  },
+
+  // Restore from a serialized snapshot.
+  restore(snap) {
+    ({
+      gInventory, lampOn, tvOn, recordPlaying, cabinetOpen,
+      mugFilled, mugHasHalf, mugHasFreshCoffee, glassFilled, farted,
+      seated, boomBoxOn, cassettePlaying, fridgeOpen, drawerOpen,
+      floppyInserted, messageHeard, floppyRead, ejectNudged,
+      vcrOn, vhsPlaying, vhsPlayingId, floppyDecryptedContent,
+      awaitingFloppyPass, awaitingSitTarget, pendingVerb,
+      lastItem, lastScenery, floppyUnlocked, kitchenDrawerOpen,
+      coffeeCanOpen, stoveOn, scrappleInPan, scrappleCooked,
+      coffeePotState, brewChecked, playerArea,
+    } = snap);
+    for (const s of snap.items) {
+      const it = ITEMS.find(i => i.id === s.id);
+      if (!it) continue;
+      Object.assign(it, {
+        hidden: s.hidden, inCabinet: s.inCabinet, inFridge: s.inFridge,
+        inDrawer: s.inDrawer, inKitchenDrawer: s.inKitchenDrawer,
+        onCounter: s.onCounter, dropped: s.dropped, _used: s._used,
+      });
+    }
+  },
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 function addLine(text = '', cls = '') {
   const span = document.createElement('span');
@@ -1519,57 +1886,7 @@ for (const it of ITEMS) {
 }
 
 function startAdventure() {
-  gInventory    = [];
-  gHistory      = [];
-  gHistIdx      = -1;
-  lampOn        = true;
-  tvOn          = false;
-  recordPlaying = null;
-  cabinetOpen     = false;
-  mugFilled         = false;
-  mugHasHalf        = false;
-  mugHasFreshCoffee = false;
-  glassFilled     = false;
-  farted          = false;
-  seated          = false;
-  boomBoxOn       = false;
-  cassettePlaying = null;
-  fridgeOpen      = false;
-  drawerOpen      = false;
-  floppyInserted    = false;
-  messageHeard      = false;
-  floppyRead        = false;
-  ejectNudged       = false;
-  vcrOn             = false;
-  vhsPlaying        = null;
-  vhsPlayingId      = null;
-  floppyDecryptedContent = null;
-  awaitingFloppyPass = false;
-  awaitingSitTarget  = false;
-  pendingVerb        = null;
-  lastItem           = null;
-  lastScenery        = null;
-  floppyUnlocked     = false;
-  kitchenDrawerOpen = false;
-  stoveOn           = false;
-  scrappleInPan     = false;
-  scrappleCooked    = false;
-  coffeePotState    = 'old';
-  brewChecked       = false;
-  for (const it of ITEMS) {
-    it.hidden          = it._origHidden;
-    it.inCabinet       = it._origInCabinet;
-    it.inFridge        = it._origInFridge;
-    it.inDrawer        = it._origInDrawer;
-    it.inKitchenDrawer = it._origInKitchenDrawer;
-    it.onCounter       = it._origOnCounter;
-    it.label           = it._origLabel;
-    it.examDesc        = it._origExamDesc;
-    it.examThought     = it._origExamThought;
-    it.takeNote        = it._origTakeNote;
-    it._used           = false;
-    it.dropped         = false;
-  }
+  GameState.reset();
 
   addLine('');
   addLine("Philadelphia, October 1993.");
@@ -1640,7 +1957,8 @@ function gameLook() {
 
 function gameTake(args) {
   if (!args.length) {
-    if (lastItem) { gameTake([lastItem]); return; }
+    const best = ContextManager.resolveIt('take');
+    if (best) { gameTake([best]); return; }
     pendingVerb = 'take'; addLine('Take what?'); return;
   }
   const word = args.join(' ');
@@ -1661,7 +1979,7 @@ function gameTake(args) {
   if (/^(record|a record|the record)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelved && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no records left on the shelf.'); return; }
-    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} off the shelf.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); ContextManager.setFocus(available[0].id, 'item'); addLine(`You take ${available[0].label} off the shelf.`); }
     else { addLine('Which record?'); for (const r of available) addLine(`  ${r.label}`); }
     return;
   }
@@ -1670,7 +1988,7 @@ function gameTake(args) {
   if (/^(cassette|tape|a cassette|a tape)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelvedTape && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no cassettes on the shelf.'); return; }
-    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} from the rack.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); ContextManager.setFocus(available[0].id, 'item'); addLine(`You take ${available[0].label} from the rack.`); }
     else { addLine('Which tape?'); for (const t of available) addLine(`  ${t.label}`); }
     return;
   }
@@ -1679,7 +1997,7 @@ function gameTake(args) {
   if (/^(vhs|video|vhs tape|a vhs|the vhs|video tape|a video|a video tape)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelvedVHS && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no VHS tapes on the shelf.'); return; }
-    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} off the shelf.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); ContextManager.setFocus(available[0].id, 'item'); addLine(`You take ${available[0].label} off the shelf.`); }
     else { addLine('Which tape?'); for (const v of available) addLine(`  ${v.label}`); }
     return;
   }
@@ -1688,7 +2006,7 @@ function gameTake(args) {
   if (/^(book|a book|the book)$/.test(word)) {
     const available = ITEMS.filter(it => it.shelvedBook && !gInventory.includes(it.id) && !it.dropped);
     if (!available.length) { addLine('There are no books left on the shelf.'); return; }
-    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You take ${available[0].label} off the shelf.`); }
+    if (available.length === 1) { autoStand(); gInventory.push(available[0].id); ContextManager.setFocus(available[0].id, 'item'); addLine(`You take ${available[0].label} off the shelf.`); }
     else { addLine('Which book?'); for (const b of available) addLine(`  ${b.label}`); }
     return;
   }
@@ -1698,7 +2016,7 @@ function gameTake(args) {
     if (!fridgeOpen) { addLine('The fridge is closed.'); return; }
     const available = ITEMS.filter(it => it.inFridge && it.drinkable && !gInventory.includes(it.id));
     if (!available.length) { addLine("There's no beer left."); return; }
-    if (available.length === 1) { autoStand(); available[0].inFridge = false; gInventory.push(available[0].id); lastItem = available[0].id; addLine(`You grab ${available[0].label} from the fridge.`); }
+    if (available.length === 1) { autoStand(); available[0].inFridge = false; gInventory.push(available[0].id); ContextManager.setFocus(available[0].id, 'item'); addLine(`You grab ${available[0].label} from the fridge.`); }
     else { addLine('Which one?'); for (const b of available) addLine(`  ${b.label}`); }
     return;
   }
@@ -1715,7 +2033,7 @@ function gameTake(args) {
     f.hidden = false;
     autoStand();
     gInventory.push('filter');
-    lastItem = 'filter';
+    ContextManager.setFocus('filter', 'item');
     addLine('You pull a filter from the box.');
     return;
   }
@@ -1731,7 +2049,7 @@ function gameTake(args) {
     autoStand();
     gInventory.push('floppy');
     addLine(wasInDrawer ? 'You take the floppy disk from the drawer.' : 'You pick up the floppy disk.');
-    lastItem = 'floppy';
+    ContextManager.setFocus('floppy', 'item');
     return;
   }
 
@@ -1750,7 +2068,7 @@ function gameTake(args) {
         const found = byArtist[0];
         autoStand();
         gInventory.push(found.id);
-        lastItem = found.id;
+        ContextManager.setFocus(found.id, 'item');
         addLine(found.shelvedTape ? `You take ${found.label} from the rack.` : `You take ${found.label} off the shelf.`);
         if (found.takeNote) addLine(found.takeNote, 'dim');
         return;
@@ -1798,13 +2116,14 @@ function gameTake(args) {
   else if (wasInKitchenDrawer)  addLine(`You take ${it.label} from the kitchen drawer.`);
   else if (wasOnCounter)        addLine(`You take ${it.label} from the counter.`);
   else                          addLine(`You pick up ${it.label}.`);
-  lastItem = it.id;
+  ContextManager.setFocus(it.id, 'item');
   if (it.takeNote) addLine(it.takeNote, 'dim');
 }
 
 function gameDrop(args) {
   if (!args.length) {
-    if (lastItem && gInventory.includes(lastItem)) { gameDrop([lastItem]); return; }
+    const best = ContextManager.resolveIt('drop') || lastItem;
+    if (best && gInventory.includes(best)) { gameDrop([best]); return; }
     pendingVerb = 'drop'; addLine('Drop what?'); return;
   }
   // Strip trailing filler words ("put record back", "put it down", "put away")
@@ -1851,20 +2170,24 @@ function gameDrop(args) {
   // Stop playback if the item was active
   if (it.shelved && recordPlaying === it.label) {
     recordPlaying = null;
+    ContextManager.setFocus(it.id, 'item');
     addLine(`You set down ${it.label}. The needle skips and goes quiet.`);
     return;
   }
   if (it.shelvedTape && cassettePlaying === it.label) {
     cassettePlaying = null;
+    ContextManager.setFocus(it.id, 'item');
     addLine(`You set down ${it.label}. The boombox goes quiet.`);
     return;
   }
   if (it.shelvedVHS && vhsPlayingId === it.id) {
     vhsPlaying   = null;
     vhsPlayingId = null;
+    ContextManager.setFocus(it.id, 'item');
     addLine(`You pull ${it.label} from the VCR and set it down.`);
     return;
   }
+  ContextManager.setFocus(it.id, 'item');
   addLine(`You set down ${it.label}.`);
 }
 
@@ -1916,6 +2239,8 @@ function gameRead(args) {
 
   const it = gameItem(word);
   if (!it || it.hidden) { addLine("You don't see that here."); return; }
+  // Auto-navigate if the item is in another area (narrative-only; no access gates for on-surface items)
+  ContextManager.canInteract(it.id);
   if (it.inCabinet       && !cabinetOpen)       { addLine("You don't see that here."); return; }
   if (it.inFridge        && !fridgeOpen)        { addLine("You don't see that here."); return; }
   if (it.inDrawer        && !drawerOpen)        { addLine("You don't see that here."); return; }
@@ -1943,6 +2268,35 @@ function gameRead(args) {
   lastItem = it.id;
   addLine('');
   for (const line of it.content.split('\n')) addLine(line);
+}
+
+// Returns item ids co-visible with a scenery object for FocusStack population.
+// Called when the player examines a container or surface so that subsequent
+// pronouns like "take it" resolve to the most contextually sensible item.
+function sceneChildren(sc) {
+  const name = sc.names[0];
+  if (/^desk/.test(name)) {
+    const surface = ITEMS.filter(i => i.onDesk && !i.hidden && !gInventory.includes(i.id)).map(i => i.id);
+    const drawer  = drawerOpen
+      ? ITEMS.filter(i => i.inDrawer && !i.hidden && !gInventory.includes(i.id)).map(i => i.id)
+      : (ITEMS.find(i => i.id === 'floppy' && !gInventory.includes('floppy')) ? ['floppy'] : []);
+    return [...surface, ...drawer];
+  }
+  if (/fridge|refrigerator/.test(name))
+    return fridgeOpen  ? ITEMS.filter(i => i.inFridge        && !gInventory.includes(i.id)).map(i => i.id) : [];
+  if (/^(record shelf|shelf|turntable)/.test(name))
+    return ITEMS.filter(i => i.shelved     && !gInventory.includes(i.id)).map(i => i.id);
+  if (/cassette shelf|cassette rack|boombox/.test(name))
+    return ITEMS.filter(i => i.shelvedTape && !gInventory.includes(i.id)).map(i => i.id);
+  if (/vhs shelf/.test(name))
+    return ITEMS.filter(i => i.shelvedVHS  && !gInventory.includes(i.id)).map(i => i.id);
+  if (/bookshelf|bookshelves/.test(name))
+    return ITEMS.filter(i => i.shelvedBook && !gInventory.includes(i.id)).map(i => i.id);
+  if (/^drawer/.test(name))
+    return drawerOpen  ? ITEMS.filter(i => i.inDrawer        && !gInventory.includes(i.id)).map(i => i.id) : [];
+  if (/cabinet|cupboard/.test(name))
+    return cabinetOpen ? ITEMS.filter(i => i.inCabinet       && !gInventory.includes(i.id)).map(i => i.id) : [];
+  return [];
 }
 
 function gameExamine(args) {
@@ -1975,16 +2329,16 @@ function gameExamine(args) {
     }
   }
 
-  // Check scenery first
+  // Check scenery first — push to FocusStack with co-visible children
   const sc = findScenery(word);
   if (sc) {
-    lastScenery = sc.names[0];
+    ContextManager.setFocus(sc.names[0], 'scenery', sceneChildren(sc));
     addLine(typeof sc.desc === 'function' ? sc.desc() : sc.desc);
     if (sc === SCENERY.coffeepot && coffeePotState === 'brewing') checkBrew();
     return;
   }
 
-  // Then items
+  // Then items — auto-navigate to the item's home area if not already there
   const it = gameItem(word);
   if (!it || it.hidden) { addLine("You don't see that here."); return; }
   if (it.inDrawer        && !drawerOpen        && !gInventory.includes(it.id)) { addLine("You don't see that here."); return; }
@@ -1992,7 +2346,8 @@ function gameExamine(args) {
   if (it.inFridge        && !fridgeOpen        && !gInventory.includes(it.id)) { addLine("You don't see that here."); return; }
   if (it.inKitchenDrawer && !kitchenDrawerOpen && !gInventory.includes(it.id)) { addLine("You don't see that here."); return; }
   if (it.id === 'scrapple' && scrappleInPan && !gInventory.includes('scrapple')) { /* in pan — still examinable */ }
-  lastItem = it.id;
+  ContextManager.canInteract(it.id);   // auto-navigate if item is in another area
+  ContextManager.setFocus(it.id, 'item');
   addLine(typeof it.examDesc === 'function' ? it.examDesc() : it.examDesc);
   if (it.examThought) addLine(it.examThought, 'dim');
 }
@@ -2038,9 +2393,17 @@ function gameToggle(args, on) {
 
 function gamePlay(args) {
   if (!args.length) {
-    // Media in hand — just play it
-    const inHand = ITEMS.find(i => (i.shelved || i.shelvedTape || i.shelvedVHS) && gInventory.includes(i.id));
-    if (inHand) { gamePlay([inHand.id]); return; }
+    // Gather all playable media in hand
+    const allInHand = ITEMS.filter(i => (i.shelved || i.shelvedTape || i.shelvedVHS) && gInventory.includes(i.id));
+    if (allInHand.length === 1) { gamePlay([allInHand[0].id]); return; }
+    if (allInHand.length > 1) {
+      // Disambiguate via ActionHistory + FocusStack; only ask if genuinely tied
+      const best = ContextManager.disambiguate('play', allInHand.map(i => i.id));
+      if (best) { gamePlay([best]); return; }
+      addLine('Play which? ' + allInHand.map(i => i.label).join(' or ') + '?');
+      pendingVerb = 'play';
+      return;
+    }
     // Tape loaded in boombox
     if (cassettePlaying && boomBoxOn)  { addLine(`${cassettePlaying} is playing.`); return; }
     if (cassettePlaying && !boomBoxOn) { findScenery('boombox').turnOn(); return; }
@@ -2128,9 +2491,12 @@ function gamePlay(args) {
 
 function gameOpen(args) {
   if (!args.length) {
-    if (lastItem) { gameOpen([lastItem]); return; }
-    if (lastScenery) { gameOpen([lastScenery]); return; }
-    if (playerArea === 'kitchen') { gameOpen(['fridge']); return; }
+    // FocusStack-aware: find the most contextually appropriate openable thing
+    const best = ContextManager.resolveIt('open');
+    if (best) { gameOpen([best]); return; }
+    // Area-based defaults when focus stack has nothing openable
+    if (playerArea === 'kitchen')                        { gameOpen(['fridge']);  return; }
+    if (playerArea === 'desk' || playerArea === 'chair') { gameOpen(['drawer']); return; }
     pendingVerb = 'open'; addLine('Open what?'); return;
   }
   autoStand();
@@ -2183,10 +2549,12 @@ function gameOpen(args) {
       drawerOpen = true;
       const fl = ITEMS.find(it => it.id === 'floppy');
       addLine('You slide open the drawer.');
-      if (fl.inDrawer && !gInventory.includes('floppy') && !floppyInserted)
+      if (fl.inDrawer && !gInventory.includes('floppy') && !floppyInserted) {
         addLine('Inside: a 3.5" floppy disk labeled "Floppy Letter 2601".', 'dim');
-      else
+        lastItem = 'floppy';
+      } else {
         addLine('The drawer is empty.', 'dim');
+      }
     }
     return;
   }
@@ -3022,7 +3390,8 @@ function gameEat(args) {
     if (scrappleInPan)             { addLine("The scrapple is in the pan but the stove is off. Turn it on first."); return; }
     if (gInventory.includes('scrapple')) { addLine("It's still raw. Slice it into the pan and cook it first."); return; }
     const _sc = ITEMS.find(i => i.id === 'scrapple');
-    if (_sc && _sc.inFridge && !_sc.hidden) { addLine("It's in the fridge. Take it out, slice it into the pan, and cook it first."); return; }
+    if (_sc && _sc.inFridge && !_sc.hidden && playerArea === 'kitchen') { addLine("It's in the fridge. Take it out, slice it into the pan, and cook it first."); return; }
+    if (_sc && _sc.inFridge && !_sc.hidden) { addLine("Eat what? You're standing in the living room."); return; }
     addLine("There's nothing to eat.");
     return;
   }
@@ -3114,6 +3483,30 @@ function gameEjectVHS() {
   addLine(`The VCR ejects ${was} with a clunk. You take it.`);
 }
 
+function gameMap() {
+  addLine('');
+  addLine('                    N', 'dim');
+  addLine('  +------------------------------------------+', 'dim');
+  addLine('  |  BOOKS  VHS  DESK+PC  CASSETTES  BOOMBOX  |-->BEDROOM', 'dim');
+  addLine('  |  phone        printer                      |', 'dim');
+  addLine('  |                                            |', 'dim');
+  addLine('  |  TV           sofa (cat)                   +-->KITCHEN', 'dim');
+  addLine('  |  VCR                                       |', 'dim');
+  addLine('  |                                            |', 'dim');
+  addLine('  |  turntable + records            window     |', 'dim');
+  addLine('  +------------------------------------------+', 'dim');
+  addLine('                    S', 'dim');
+  addLine('');
+  let where = 'the middle of the room';
+  if      (playerArea === 'desk' || playerArea === 'chair') where = 'the desk';
+  else if (playerArea === 'sofa')    where = 'the sofa';
+  else if (playerArea === 'kitchen') where = 'the kitchen';
+  else if (playerArea === 'shelf')   where = 'the record shelf';
+  else if (playerArea === 'north')   where = 'the bookshelves';
+  else if (playerArea === 'ne')      where = 'the northeast corner';
+  addLine('You are near ' + where + '.', 'dim');
+}
+
 function gameHelp() {
   const lines = [
     'Commands:',
@@ -3125,6 +3518,7 @@ function gameHelp() {
     '  open / close        — doors, drawers, the fridge',
     '  go <direction>      — move around',
     '  inventory  (i)      — what you\'re carrying',
+    '  map                 — show a floor plan of the apartment',
     '  wait  (z)           — pass a moment',
     '  transcript          — save session output to a text file',
     '  quit                — return to the terminal',
@@ -3187,18 +3581,20 @@ function handleGameCommand(raw) {
   const pv = pendingVerb;
   pendingVerb = null;
 
-  // Pronoun substitution: 'it'/'that'/'this' → last item, or last scenery as fallback
-  const pronounSub = (str) => {
-    if (lastItem)    return str.replace(/\bit\b|\bthat\b|\bthis\b|\bone\b/g, lastItem);
-    if (lastScenery) return str.replace(/\bit\b|\bthat\b|\bthis\b/g, lastScenery);
-    return str;
-  };
-  const subbed  = pronounSub(trimmed);
+  // Probe verb before full tokenisation so pronoun resolution can weight by verb
+  const rawVerb = trimmed.toLowerCase().split(/\s+/)[0];
+
+  // FocusStack-aware pronoun substitution: resolves 'it'/'that'/'this'/'one'
+  // against the semantic focus rather than just the last regex match.
+  const subbed = ContextManager.resolvePronouns(trimmed, rawVerb);
 
   const tokens = subbed.toLowerCase().split(/\s+/);
   const cmd    = tokens[0];
   const args   = tokens.slice(1);
   const rest   = args.join(' ');
+
+  // Record structured intent in ActionHistory for future disambiguation
+  ContextManager.push({ verb: cmd, object: rest, area: playerArea });
 
   // ── Multi-word pattern dispatch ──────────────────────────────────────────
   if      (cmd === 'look'  && args[0] === 'at')                         { gameExamine(args.slice(1)); }
@@ -3436,6 +3832,7 @@ function handleGameCommand(raw) {
         break;
       case 'wave':                                      addLine('You wave at nobody in particular.'); break;
       case 'score':                                     addLine('There is no score. Just the room.'); break;
+      case 'map':                                       gameMap(); break;
       case 'about': case 'credits': case 'info':        addLine('West Philly Simulator 93. A small apartment, October 1993. Made for one person. Everyone else is welcome to look around.'); break;
       case 'xyzzy': case 'plugh':                       addLine('Nothing happens.'); break;
 
