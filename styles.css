@@ -1,0 +1,181 @@
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Phosphor green palette ─────────────────────────────────────────────── */
+    :root {
+      --amber:    #33ff33;   /* normal output       */
+      --amber-hi: #99ff99;   /* bright / prompts    */
+      --amber-lo: #1a6b1a;   /* dim / system msgs   */
+      --amber-bg: #000000;
+      --amber-border: #228822;
+    }
+
+    html, body {
+      background: var(--amber-bg);
+      color: var(--amber);
+      font-family: 'VT323', 'Courier New', Courier, monospace;
+      font-size: 24px;
+      line-height: 1.45;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* ── Outer layout ───────────────────────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+    }
+
+    /* ── Status panel ───────────────────────────────────────────────────────── */
+    #panel {
+      flex-shrink: 0;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--amber-border);
+      white-space: pre;
+      overflow: hidden;
+      color: var(--amber-hi);
+      line-height: 1.5;
+      user-select: none;
+    }
+    #panel .dim  { color: var(--amber-lo); }
+    #panel .norm { color: var(--amber); }
+
+    /* ── Scrollable output ──────────────────────────────────────────────────── */
+    #output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px 4px;
+      scroll-behavior: smooth;
+    }
+
+    .line {
+      display: block;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 1.5em;
+    }
+    .line.dim   { color: var(--amber-lo); }
+    .line.hi    { color: var(--amber-hi); }
+    .line.err   { color: #cc4400; }
+    .line.white { color: #ffffff; }
+
+    /* ── Input row ──────────────────────────────────────────────────────────── */
+    #input-row {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      padding: 4px 12px 8px;
+      border-top: 1px solid var(--amber-lo);
+    }
+
+    #prompt {
+      color: var(--amber-hi);
+      white-space: pre;
+      user-select: none;
+    }
+
+    #cmd-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--amber);
+      font-family: inherit;
+      font-size: inherit;
+      caret-color: var(--amber-hi);
+      padding: 0 0 0 2px;
+    }
+
+    /* hide the password field visually but keep it readable by screenreaders */
+    
+
+    /* ── Blinking cursor ────────────────────────────────────────────────────── */
+    @keyframes blink {
+      0%, 49%  { opacity: 1; }
+      50%, 100%{ opacity: 0; }
+    }
+    .cursor::after {
+      content: '█';
+      animation: blink 1s step-end infinite;
+      color: var(--amber-hi);
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────────────────────────── */
+    #output::-webkit-scrollbar { width: 6px; }
+    #output::-webkit-scrollbar-track { background: #111; }
+    #output::-webkit-scrollbar-thumb { background: var(--amber-lo); border-radius: 3px; }
+
+    /* ── Mobile ─────────────────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      html, body { font-size: 15px; }
+      #output     { padding: 6px 8px 4px; }
+      #input-row  { padding: 4px 8px 6px; }
+      #panel      { padding: 4px 6px; }
+    }
+
+    /* ── Letter overlay (floppy letter) ─────────────────────────────────────── */
+    #crt-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.65);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      cursor: default;
+    }
+    #crt-overlay.visible { opacity: 1; }
+
+    #crt-screen {
+      position: relative; z-index: 2;
+      max-width: 860px; width: 92%;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 3rem 3.5rem;
+      background: #faf9f7;
+      border-radius: 2px;
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
+      font-family: 'Lora', Georgia, serif;
+      font-size: 17px;
+      line-height: 1.85;
+      color: #1a1a1a;
+      scrollbar-width: thin;
+      scrollbar-color: #ccc transparent;
+    }
+    #crt-screen::-webkit-scrollbar       { width: 4px; }
+    #crt-screen::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+    #crt-bar {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.75rem;
+      color: #999;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 0.75rem;
+      margin-bottom: 2rem;
+      letter-spacing: 0.05em;
+    }
+    #crt-body {
+      white-space: pre-wrap;
+    }
+    #crt-foot {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.75rem;
+      color: #aaa;
+      border-top: 1px solid #e0e0e0;
+      margin-top: 2.5rem;
+      padding-top: 0.75rem;
+      text-align: center;
+    }
+    #crt-foot .cursor::after { color: #aaa; }
+
+    @media (max-width: 600px) {
+      #crt-screen { padding: 2rem 1.5rem; font-size: 15px; }
+    }
+/* Firefox scrollbars */
+#output, #crt-screen {
+  scrollbar-width: thin;
+  scrollbar-color: var(--amber-lo) #111;
+}
