@@ -194,7 +194,7 @@ $3`,
   // ── Counter items (onCounter: true — visible on counter, not in room) ────
   {
     id:        'coffee can',
-    label:     'a can of Chase & Sanborn coffee',
+    label:     'a can of Chase & Sanborn coffee grounds',
     onCounter: true,
     examDesc:  'Chase & Sanborn ground coffee. A medium-sized can, about half full. The plastic lid is on.',
   },

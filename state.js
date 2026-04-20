@@ -197,8 +197,8 @@ export const ContextManager = (() => {
   // Used by resolveIt() to prefer a contextually sensible resolution over
   // whatever happened to be the last regex match.
   const VERB_CHECKS = {
-    open:       id => /drawer|fridge|refrigerator|cabinet|box|door/.test(id),
-    close:      id => /drawer|fridge|refrigerator|cabinet|box|door/.test(id),
+    open:       id => /drawer|fridge|refrigerator|cabinet|box|door|can|grounds/.test(id),
+    close:      id => /drawer|fridge|refrigerator|cabinet|box|door|can|grounds/.test(id),
     read:       id => /floppy|disk|billboard|flyer|book|note|letter|magazine|poster/.test(id),
     play:       id => ITEMS.some(i => (i.shelved || i.shelvedTape || i.shelvedVHS) && i.id === id),
     take:       id => ITEMS.some(i => i.id === id && !i.hidden),

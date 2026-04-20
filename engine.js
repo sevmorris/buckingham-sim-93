@@ -998,13 +998,32 @@ function gameOpen(args) {
     const best = ContextManager.resolveIt('open');
     if (best) { gameOpen([best]); return; }
     // Area-based defaults when focus stack has nothing openable
-    if (GameState.playerArea === 'kitchen')                        { gameOpen(['fridge']);  return; }
-    if (GameState.playerArea === 'desk' || GameState.playerArea === 'chair') { gameOpen(['drawer']); return; }
+    if (GameState.playerArea === 'kitchen') {
+      if (!GameState.fridgeOpen) { gameOpen(['fridge']); return; }
+      if (!GameState.kitchenDrawerOpen) { gameOpen(['kitchen drawer']); return; }
+      if (!GameState.coffeeCanOpen) { gameOpen(['can']); return; }
+      if (!GameState.cabinetOpen) { gameOpen(['cabinet']); return; }
+    }
+    if ((GameState.playerArea === 'desk' || GameState.playerArea === 'chair') && !GameState.drawerOpen) { gameOpen(['drawer']); return; }
     GameState.pendingVerb = 'open'; addLine('Open what?'); return;
   }
   autoStand();
-  while (args.length && (args[0] === 'the' || args[0] === 'a')) args = args.slice(1);
+  while (args.length && (args[0] === 'the' || args[0] === 'a' || args[0] === 'an')) args = args.slice(1);
   const word = args.join(' ');
+  
+  if (/\b(can|coffee|grounds|chase|sanborn)\b/.test(word)) {
+    if (!ensureArea('kitchen')) return;
+    if (GameState.coffeeCanOpen) { addLine('The can is already open.'); return; }
+    const can = ITEMS.find(i => i.id === 'coffee can');
+    if (!GameState.gInventory.includes('coffee can') && !(can && can.onCounter)) {
+      addLine("You don't have the coffee can."); return;
+    }
+    GameState.coffeeCanOpen = true;
+    addLine('You pry off the plastic lid. The smell of ground coffee fills the kitchen.');
+    ContextManager.setFocus('coffee can', 'item');
+    return;
+  }
+  
   if (/cabinet|cupboard/.test(word)) {
     if (GameState.cabinetOpen) { addLine('The cabinet is already open.'); return; }
     GameState.cabinetOpen = true;
@@ -1068,17 +1087,6 @@ function gameOpen(args) {
     return;
   }
   if (/half.*(half|&)/.test(word)) { gameAddHalfAndHalf(); return; }
-  if (/\b((coffee\s+)?(can|grounds|container)|chase|sanborn)\b/.test(word)) {
-    if (!ensureArea('kitchen')) return;
-    if (GameState.coffeeCanOpen) { addLine('The can is already open.'); return; }
-    const can = ITEMS.find(i => i.id === 'coffee can');
-    if (!GameState.gInventory.includes('coffee can') && !(can && can.onCounter)) {
-      addLine("You don't have the coffee can."); return;
-    }
-    GameState.coffeeCanOpen = true;
-    addLine('You pry off the plastic lid. The smell of ground coffee fills the kitchen.');
-    return;
-  }
   if (/filter box|box of filter|filters/.test(word)) { addLine("Pull one out and add it to the basket."); return; }
   if (/door/.test(word)) { addLine("You're not going anywhere right now."); return; }
   addLine("You can't open that.");
@@ -2144,7 +2152,6 @@ const VERB_REGISTRY = [
       addLine("To start a fresh pot, dump the carafe first.", 'dim');
     } else { gameFillMug(); }
   } },
-  { test: (cmd, args, rest) => cmd === 'get'   && /coffee/.test(rest), exec: (cmd, args, rest) => { gameFillMug(); } },
   { test: (cmd, args, rest) => cmd === 'drink' && /water|glass/.test(rest), exec: (cmd, args, rest) => { gameDrink(['water']); } },
   // ── Fresh coffee steps ───────────────────────────────────────────────────
   { test: (cmd, args, rest) => cmd === 'make' && /coffee|pot|fresh|cup/.test(rest), exec: (cmd, args, rest) => {
