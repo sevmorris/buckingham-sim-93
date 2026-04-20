@@ -1959,9 +1959,17 @@ function gameTake(args) {
   if (!args.length) {
     const best = ContextManager.resolveIt('take');
     if (best) { gameTake([best]); return; }
+    if (playerArea === 'north') { gameTake(['phone']); return; }
     pendingVerb = 'take'; addLine('Take what?'); return;
   }
   const word = args.join(' ');
+
+  // Phone receiver
+  if (/^(phone|telephone|receiver|handset|the phone|the receiver)$/.test(word)) {
+    addLine('You pick up the receiver. Dial tone.');
+    ContextManager.setFocus('phone', 'scenery');
+    return;
+  }
 
   // Taking a single pen from the desk cup
   if (/^(pen|pens|a pen|the pen|the pens)$/.test(word)) {
