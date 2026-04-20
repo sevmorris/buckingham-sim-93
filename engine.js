@@ -2218,6 +2218,13 @@ const VERB_REGISTRY = [
   { test: (cmd) => ['throw', 'toss', 'discard'].includes(cmd), exec: (cmd, args, rest) => { gameThrowAway(args); } },
   { test: (cmd) => ['push', 'shove'].includes(cmd), exec: (cmd, args, rest) => { addLine("That doesn't budge."); } },
   { test: (cmd) => ['pull'].includes(cmd), exec: (cmd, args, rest) => { addLine('You give it a tug. Nothing moves.'); } },
+  { test: (cmd) => ['relax', 'chill', 'rest', 'unwind'].includes(cmd), exec: (cmd, args, rest) => {
+    if (GameState.seated) {
+      addLine("You lean back into the cushions. The cat shifts slightly against your leg. For a moment, everything is perfectly fine.");
+    } else {
+      addLine("You can't really relax standing up. Maybe sit down first.");
+    }
+  } },
   { test: (cmd) => ['sleep', 'nap'].includes(cmd), exec: (cmd, args, rest) => { addLine("You're not tired enough for that."); } },
   { test: (cmd) => ['think'].includes(cmd), exec: (cmd, args, rest) => { addLine('Your mind wanders.'); } },
   { test: (cmd) => ['dance'].includes(cmd), exec: (cmd, args, rest) => { addLine('You shuffle in place for a moment.'); } },
@@ -2306,6 +2313,13 @@ const VERB_REGISTRY = [
   { test: (cmd) => ['turn'].includes(cmd), exec: (cmd, args, rest) => { addLine('Turn what on or off?'); } },
   { test: (cmd) => ['push', 'shove'].includes(cmd), exec: (cmd, args, rest) => { addLine("That doesn't budge."); } },
   { test: (cmd) => ['pull'].includes(cmd), exec: (cmd, args, rest) => { addLine('You give it a tug. Nothing moves.'); } },
+  { test: (cmd) => ['relax', 'chill', 'rest', 'unwind'].includes(cmd), exec: (cmd, args, rest) => {
+    if (GameState.seated) {
+      addLine("You lean back into the cushions. The cat shifts slightly against your leg. For a moment, everything is perfectly fine.");
+    } else {
+      addLine("You can't really relax standing up. Maybe sit down first.");
+    }
+  } },
   { test: (cmd) => ['sleep', 'nap'].includes(cmd), exec: (cmd, args, rest) => { addLine("You're not tired enough for that."); } },
   { test: (cmd) => ['think'].includes(cmd), exec: (cmd, args, rest) => { addLine('Your mind wanders.'); } },
   { test: (cmd) => ['dance'].includes(cmd), exec: (cmd, args, rest) => { addLine('You shuffle in place for a moment.'); } },
