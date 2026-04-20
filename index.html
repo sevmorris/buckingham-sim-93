@@ -2551,7 +2551,7 @@ function gameOpen(args) {
       addLine('You slide open the drawer.');
       if (fl.inDrawer && !gInventory.includes('floppy') && !floppyInserted) {
         addLine('Inside: a 3.5" floppy disk labeled "Floppy Letter 2601".', 'dim');
-        lastItem = 'floppy';
+        ContextManager.setFocus('floppy', 'item');
       } else {
         addLine('The drawer is empty.', 'dim');
       }
