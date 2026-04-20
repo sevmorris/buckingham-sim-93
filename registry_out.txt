@@ -1,0 +1,101 @@
+const VERB_REGISTRY = [
+  // ── Multi-word pattern dispatch ──────────────────────────────────────────
+  { test: (cmd, args, rest) => cmd === 'look'  && args[0] === 'at', exec: (cmd, args, rest) => { gameExamine(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'look'  && /^around/.test(rest), exec: (cmd, args, rest) => { gameLook(); } },
+  { test: (cmd, args, rest) => cmd === 'look'  && /^(out|outside|through)/.test(rest), exec: (cmd, args, rest) => { gameExamine(['window']); } },
+  { test: (cmd, args, rest) => cmd === 'look'  && (args[0] === 'in' || args[0] === 'inside' || args[0] === 'into'), exec: (cmd, args, rest) => { gameExamine(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'where' && /^am\b/.test(rest), exec: (cmd, args, rest) => { handleGameCommand('where'); } },
+  { test: (cmd, args, rest) => cmd === 'pick'  && args[0] === 'up', exec: (cmd, args, rest) => { gameTake(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'put'   && args[0] === 'down', exec: (cmd, args, rest) => { gameDrop(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'put'   && /on (the )?turntable/.test(rest), exec: (cmd, args, rest) => { gamePlay(rest.replace(/\s*on (the )?turntable/, '').trim().split(' ')); } },
+  { test: (cmd, args, rest) => cmd === 'turn'  && args[0] === 'on'  && /coffee|maker|coffeemaker/.test(args.slice(1).join(' ')), exec: (cmd, args, rest) => { gameStartBrew(); } },
+  { test: (cmd, args, rest) => cmd === 'turn'  && args[0] === 'off' && /coffee|maker|coffeemaker/.test(args.slice(1).join(' ')), exec: (cmd, args, rest) => { addLine(GameState.coffeePotState === 'brewing' ? "It's already going. Let it finish." : "The coffee maker is off."); } },
+  { test: (cmd, args, rest) => cmd === 'turn'  && args[0] === 'on', exec: (cmd, args, rest) => { gameToggle(args.slice(1), true); } },
+  { test: (cmd, args, rest) => cmd === 'turn'  && args[0] === 'off', exec: (cmd, args, rest) => { gameToggle(args.slice(1), false); } },
+  { test: (cmd, args, rest) => cmd === 'turn'  && args[args.length - 1] === 'on', exec: (cmd, args, rest) => { gameToggle(args.slice(0, -1), true); } },
+  { test: (cmd, args, rest) => cmd === 'turn'  && args[args.length - 1] === 'off', exec: (cmd, args, rest) => { gameToggle(args.slice(0, -1), false); } },
+  { test: (cmd, args, rest) => cmd === 'get'   && args[0] === 'up', exec: (cmd, args, rest) => { gameStand(); } },
+  { test: (cmd, args, rest) => cmd === 'stand' && args[0] === 'up', exec: (cmd, args, rest) => { gameStand(); } },
+  { test: (cmd, args, rest) => cmd === 'lie'   && /^(down|on)/.test(rest), exec: (cmd, args, rest) => { gameSit(args); } },
+  { test: (cmd, args, rest) => cmd === 'lay'   && /^(down|on)/.test(rest), exec: (cmd, args, rest) => { gameSit(args); } },
+  { test: (cmd, args, rest) => cmd === 'go'    && (args[0] === 'to' || args[0] === 'into' || args[0] === 'in'), exec: (cmd, args, rest) => { gameGo(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'walk'  && (args[0] === 'to' || args[0] === 'into'), exec: (cmd, args, rest) => { gameGo(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'head'  && (args[0] === 'to' || args[0] === 'towards'), exec: (cmd, args, rest) => { gameGo(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'play'   && /message|messages|voicemail/.test(rest), exec: (cmd, args, rest) => { gamePlayMessage(); } },
+  { test: (cmd, args, rest) => cmd === 'check'  && /message|messages|voicemail|machine/.test(rest), exec: (cmd, args, rest) => { gamePlayMessage(); } },
+  { test: (cmd, args, rest) => cmd === 'listen' && /message|messages|voicemail|machine/.test(rest), exec: (cmd, args, rest) => { gamePlayMessage(); } },
+  { test: (cmd, args, rest) => cmd === 'press'  && /play/.test(rest), exec: (cmd, args, rest) => { gamePlayMessage(); } },
+  { test: (cmd, args, rest) => cmd === 'pick'   && /phone|up the phone/.test(rest), exec: (cmd, args, rest) => { addLine('You pick up the receiver. Dial tone.'); } },
+  { test: (cmd, args, rest) => cmd === 'hang'   && /up/.test(rest), exec: (cmd, args, rest) => { addLine('You set the receiver back down.'); } },
+  { test: (cmd, args, rest) => (cmd === 'insert' || cmd === 'load') && /vhs|video/.test(rest), exec: (cmd, args, rest) => { gameInsertVHS(); } },
+  { test: (cmd, args, rest) => (cmd === 'insert' || cmd === 'load') && /cassette/.test(rest), exec: (cmd, args, rest) => { gameInsertCassette(); } },
+  { test: (cmd, args, rest) => cmd === 'insert' && /floppy|disk/.test(rest), exec: (cmd, args, rest) => { gameInsertFloppy(); } },
+  { test: (cmd, args, rest) => cmd === 'eject'  && /floppy|disk/.test(rest), exec: (cmd, args, rest) => { gameEjectFloppy(); } },
+  { test: (cmd, args, rest) => cmd === 'remove' && /floppy|disk/.test(rest), exec: (cmd, args, rest) => { gameEjectFloppy(); } },
+  { test: (cmd, args, rest) => (cmd === 'eject' || cmd === 'remove') && /cassette|boombox/.test(rest), exec: (cmd, args, rest) => { gameEjectCassette(); } },
+  { test: (cmd, args, rest) => (cmd === 'eject' || cmd === 'remove') && /vhs|vcr|video|movie|tape/.test(rest), exec: (cmd, args, rest) => { gameEjectVHS(); } },
+  { test: (cmd, args, rest) => cmd === 'put'    && /floppy|disk/.test(rest) && /computer|drive|slot/.test(rest), exec: (cmd, args, rest) => { gameInsertFloppy(); } },
+  { test: (cmd, args, rest) => cmd === 'put'    && /vhs|tape|video|movie/.test(rest) && /vcr|player/.test(rest), exec: (cmd, args, rest) => { gamePlay(rest.replace(/\s*(in(to)?|the)\s*(vcr|player)/g, '').trim().split(' ')); } },
+  { test: (cmd, args, rest) => cmd === 'dir'    && /floppy|disk/.test(rest), exec: (cmd, args, rest) => { GameState.floppyInserted ? (addLine(''), addLine('A:\\'), addLine('  LETTER  TXT     2048  10-03-93  11:48p')) : addLine("There's no disk in the drive."); } },
+  { test: (cmd, args, rest) => cmd === 'type'   && /letter|txt/.test(rest), exec: (cmd, args, rest) => { gameRead(['letter.txt']); } },
+  { test: (cmd, args, rest) => cmd === 'listen' && args[0] === 'to', exec: (cmd, args, rest) => { gameListen(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'stop'  && /record|music|player|turntable|needle/.test(rest), exec: (cmd, args, rest) => { gameStop(args); } },
+  { test: (cmd, args, rest) => cmd === 'stop'  && /vcr|vhs|movie|film|video/.test(rest), exec: (cmd, args, rest) => { gameStop(args); } },
+  { test: (cmd, args, rest) => cmd === 'watch' && /vcr|vhs|movie|film|video/.test(rest), exec: (cmd, args, rest) => { gameWatch(args); } },
+  { test: (cmd, args, rest) => cmd === 'lift'  && /needle/.test(rest), exec: (cmd, args, rest) => { gameStop(['needle']); } },
+  { test: (cmd, args, rest) => /^(pour|add|mix|put|splash)$/.test(cmd) && /half.*(half|&)|creamer|cream/.test(rest), exec: (cmd, args, rest) => { gameAddHalfAndHalf(); } },
+  { test: (cmd, args, rest) => /^(pour|add|mix|splash)$/.test(cmd) && /^(in(to)?|to)\s+(the\s+)?(mug|cup|coffee)/.test(rest) && GameState.gInventory.includes('half and half'), exec: (cmd, args, rest) => { gameAddHalfAndHalf(); } },
+  { test: (cmd, args, rest) => (cmd === 'fill' || cmd === 'pour') && /mug|cup/.test(rest), exec: (cmd, args, rest) => { gameFillMug(); } },
+  { test: (cmd, args, rest) => (cmd === 'fill' || cmd === 'pour') && /glass|water/.test(rest), exec: (cmd, args, rest) => { gameFillGlass(); } },
+  { test: (cmd, args, rest) => cmd === 'get'   && /water/.test(rest), exec: (cmd, args, rest) => { gameFillGlass(); } },
+  { test: (cmd, args, rest) => cmd === 'get'   && /coffee/.test(rest), exec: (cmd, args, rest) => { gameFillMug(); } },
+  { test: (cmd, args, rest) => cmd === 'drink' && /water|glass/.test(rest), exec: (cmd, args, rest) => { gameDrink(['water']); } },
+  // ── Fresh coffee steps ───────────────────────────────────────────────────
+  { test: (cmd, args, rest) => cmd === 'throw' && args[0] === 'away', exec: (cmd, args, rest) => { gameThrowAway(args.slice(1)); } },
+  { test: (cmd, args, rest) => cmd === 'throw' && /trash|garbage|bin|away|out/.test(rest), exec: (cmd, args, rest) => { gameThrowAway(args); } },
+  { test: (cmd, args, rest) => (cmd === 'toss' || cmd === 'discard') && rest, exec: (cmd, args, rest) => { gameThrowAway(args); } },
+  { test: (cmd, args, rest) => (cmd === 'wash' || cmd === 'clean') && /dish|dishes|plate|plates/.test(rest), exec: (cmd, args, rest) => { addLine('You run the water and wash the few dishes in the sink. They can air dry.'); } },
+  { test: (cmd, args, rest) => (cmd === 'dump' || cmd === 'empty') && /mug|cup/.test(rest), exec: (cmd, args, rest) => { gameDumpMug(); } },
+  { test: (cmd, args, rest) => cmd === 'pour' && /out/.test(rest) && /mug|cup/.test(rest), exec: (cmd, args, rest) => { gameDumpMug(); } },
+  { test: (cmd, args, rest) => cmd === 'fill' && /carafe|pot|reservoir|maker|coffee maker/.test(rest), exec: (cmd, args, rest) => { gameFillCarafe(); } },
+  { test: (cmd, args, rest) => cmd === 'fill' && /water/.test(rest) && /carafe|pot|reservoir/.test(rest), exec: (cmd, args, rest) => { gameFillCarafe(); } },
+  { test: (cmd, args, rest) => cmd === 'flip' && /switch|maker|coffee/.test(rest), exec: (cmd, args, rest) => { gameStartBrew(); } },
+  { test: (cmd, args, rest) => cmd === 'brew' && !rest, exec: (cmd, args, rest) => { gameStartBrew(); } },
+  { test: (cmd, args, rest) => cmd === 'check' && /coffee|brew|pot|carafe|maker/.test(rest), exec: (cmd, args, rest) => { checkBrew(); } },
+  // ── TV channel / input switching ────────────────────────────────────────
+  { test: (cmd, args, rest) => !GameState.tvOn, exec: (cmd, args, rest) => { addLine("The TV is off."); } },
+  // ── Scrapple / cooking ───────────────────────────────────────────────────
+  { test: (cmd, args, rest) => cmd === 'slice' && /scrapple/.test(rest), exec: (cmd, args, rest) => { gamePutInPan([]); } },
+  { test: (cmd, args, rest) => cmd === 'cut'   && /scrapple/.test(rest), exec: (cmd, args, rest) => { gamePutInPan([]); } },
+  { test: (cmd, args, rest) => cmd === 'open'  && /kitchen drawer|knife drawer|drawer by|silverware|utensil/.test(rest), exec: (cmd, args, rest) => { gameOpen(['kitchen drawer']); } },
+  { test: (cmd, args, rest) => cmd === 'close' && /kitchen drawer|knife drawer|drawer by|silverware|utensil/.test(rest), exec: (cmd, args, rest) => { gameClose(['kitchen drawer']); } },
+  { test: (cmd, args, rest) => cmd === 'light' && /stove|burner|range|oven/.test(rest), exec: (cmd, args, rest) => { gameToggle(['stove'], true); } },
+  { test: (cmd, args, rest) => cmd === 'ignite'&& /stove|burner|range/.test(rest), exec: (cmd, args, rest) => { gameToggle(['stove'], true); } },
+  { test: (cmd, args, rest) => cmd === 'fry'   && /scrapple|breakfast|it/.test(rest), exec: (cmd, args, rest) => { gameCook(['scrapple']); } },
+  { test: (cmd, args, rest) => cmd === 'fry'   && !rest, exec: (cmd, args, rest) => { gameCook([]); } },
+  { test: (cmd, args, rest) => cmd === 'watch' && /tv|television|set|show|hogan|screen/.test(rest), exec: (cmd, args, rest) => { gameWatch(args); } },
+  // ── Looking & examining ──────────────────────────────────────────────
+  // ── Taking & dropping ────────────────────────────────────────────────
+  // ── Reading ──────────────────────────────────────────────────────────
+  // ── Opening & closing ────────────────────────────────────────────────
+  // ── Phone & answering machine ────────────────────────────────────────
+  // ── Floppy ───────────────────────────────────────────────────────────
+  // ── VCR ──────────────────────────────────────────────────────────────
+  { test: (cmd, args, rest) => !GameState.cassettePlaying, exec: (cmd, args, rest) => { addLine("There's no tape in the boombox."); break; } },
+  { test: (cmd, args, rest) => !GameState.boomBoxOn, exec: (cmd, args, rest) => { addLine("The boombox is off.");              break; } },
+  { test: (cmd, args, rest) => !GameState.vhsPlayingId, exec: (cmd, args, rest) => { addLine("There's no tape in the VCR."); break; } },
+  { test: (cmd, args, rest) => !GameState.vcrOn, exec: (cmd, args, rest) => { addLine("The VCR is off.");              break; } },
+  // ── Records ──────────────────────────────────────────────────────────
+  // ── Sitting & standing ───────────────────────────────────────────────
+  // ── Movement ─────────────────────────────────────────────────────────
+  // ── Senses ───────────────────────────────────────────────────────────
+  // ── Coffee ───────────────────────────────────────────────────────────
+  // ── Cooking ──────────────────────────────────────────────────────────
+  // ── Utility ──────────────────────────────────────────────────────────
+  // ── Physics ──────────────────────────────────────────────────────────
+  // ── Flavor ───────────────────────────────────────────────────────────
+  // ── Nonsense & chaos ─────────────────────────────────────────────────
+  // ── Help & quit ──────────────────────────────────────────────────────
+  { test: (cmd, args, rest) => pv, exec: (cmd, args, rest) => { handleGameCommand(pv + ' ' + trimmed); return; } },
+  // Context-aware fallback — mid-process hints instead of a dead end
+];
